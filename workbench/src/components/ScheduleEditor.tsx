@@ -4,16 +4,60 @@ type Props = {
   data: Record<string, unknown> | null;
   onChange: (data: Record<string, unknown>) => void;
   onSave: () => void;
+  onRevert?: () => void;
+  entityOptions?: string[];
+  edgeOptions?: string[];
   selectedMoveIndex: number | null;
   onSelectMove: (index: number) => void;
   activeMoveIndices: Set<number>;
   disabled?: boolean;
 };
 
+function SuggestInput({
+  id,
+  value,
+  options,
+  ariaLabel,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  options: string[];
+  ariaLabel: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const listId = `${id}-options`;
+  return (
+    <>
+      <input
+        id={id}
+        list={options.length > 0 ? listId : undefined}
+        aria-label={ariaLabel}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        onClick={(e) => e.stopPropagation()}
+      />
+      {options.length > 0 && (
+        <datalist id={listId}>
+          {options.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
+      )}
+    </>
+  );
+}
+
 export function ScheduleEditor({
   data,
   onChange,
   onSave,
+  onRevert,
+  entityOptions = [],
+  edgeOptions = [],
   selectedMoveIndex,
   onSelectMove,
   activeMoveIndices,
@@ -36,7 +80,7 @@ export function ScheduleEditor({
   };
 
   return (
-    <div>
+    <div className="schedule-editor">
       <h2>Schedule Editor</h2>
       <div className="table-wrap">
         <table aria-label="Schedule moves">
@@ -66,21 +110,23 @@ export function ScheduleEditor({
                     onClick={() => onSelectMove(index)}
                   >
                     <td>
-                      <input
-                        data-move-index={String(index)}
-                        data-edge={move.edge ?? ""}
-                        aria-label={`Entity ${index}`}
+                      <SuggestInput
+                        id={`move-entity-${index}`}
                         value={move.entity ?? ""}
+                        options={entityOptions}
+                        ariaLabel={`Entity ${index}`}
                         disabled={disabled}
-                        onChange={(e) => updateMove(index, "entity", e.target.value)}
+                        onChange={(v) => updateMove(index, "entity", v)}
                       />
                     </td>
                     <td>
-                      <input
-                        aria-label={`Edge ${index}`}
+                      <SuggestInput
+                        id={`move-edge-${index}`}
                         value={move.edge ?? ""}
+                        options={edgeOptions}
+                        ariaLabel={`Edge ${index}`}
                         disabled={disabled}
-                        onChange={(e) => updateMove(index, "edge", e.target.value)}
+                        onChange={(v) => updateMove(index, "edge", v)}
                       />
                     </td>
                     <td>
@@ -90,6 +136,7 @@ export function ScheduleEditor({
                         value={move.start ?? 0}
                         disabled={disabled}
                         onChange={(e) => updateMove(index, "start", Number(e.target.value))}
+                        onClick={(e) => e.stopPropagation()}
                       />
                     </td>
                     <td>
@@ -111,6 +158,11 @@ export function ScheduleEditor({
         <button type="button" className="btn btn-primary" onClick={onSave} disabled={disabled}>
           Save Schedule
         </button>
+        {onRevert && (
+          <button type="button" className="btn btn-secondary" onClick={onRevert} disabled={disabled}>
+            Revert Schedule
+          </button>
+        )}
       </div>
     </div>
   );

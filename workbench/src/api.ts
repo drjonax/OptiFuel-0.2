@@ -6,6 +6,23 @@ export type ScenarioResponse = {
   etag: string;
 };
 
+export type ViolationRecord = {
+  constraint_id: string;
+  rule_id?: string;
+  target?: string;
+  scope?: string;
+  hard: boolean;
+  message: string;
+  entity_ids: string[];
+  t_min?: number | null;
+};
+
+export type ScheduleMoveRecord = {
+  entity: string;
+  edge: string;
+  start: number;
+};
+
 export type RunResult = {
   manifest?: Record<string, unknown>;
   timeline?: Array<Record<string, unknown>>;
@@ -73,11 +90,16 @@ export async function simulate(scenarioPath: string, schedulePath: string, runti
   });
 }
 
-export async function optimize(scenarioPath: string) {
+export async function optimize(scenarioPath: string, seedSchedulePath: string) {
   return request<RunResult>("/runs/optimize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scenario_path: scenarioPath, seed: 42, time_limit_sec: 3 }),
+    body: JSON.stringify({
+      scenario_path: scenarioPath,
+      seed_schedule_path: seedSchedulePath,
+      seed: 42,
+      time_limit_sec: 3,
+    }),
   });
 }
 
