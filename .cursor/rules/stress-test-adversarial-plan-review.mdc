@@ -1,0 +1,204 @@
+---
+description: >-
+  Adversarial review of a coding or implementation plan. Finds logic errors,
+  poor project fit, unnecessary complexity, refactor opportunities, tech debt,
+  and plan-level UI/UX gaps. Returns a severity-graded findings ledger and a
+  revised plan. Invoke manually with phrases like "stress-test this plan",
+  "poke holes in this", "red-team this", "what's wrong with this plan",
+  "review before I build", or "harden this plan".
+alwaysApply: false
+---
+
+# Stress-Test: Adversarial Coding Plan Review
+
+Invoke when the user wants a plan attacked before implementation. Do **not** use for PR reviews of already-committed code, bug triage, or non-coding strategy plans.
+
+---
+
+## Flow
+
+### 1. Scope check
+
+- Is there a plan in context? If not, ask the user to paste or point to it — do not invent one.
+- Is the plan partially implemented? Read the relevant files and flag any divergence between plan and code.
+
+### 2. Goal check (conditional)
+
+If the plan's goal is ambiguous, restate it in one sentence and confirm before continuing. If the goal is clear, skip — do not waste tokens restating it.
+
+### 3. Read the code the plan touches
+
+Read the files named in the plan. Grep for key symbols only if the plan is vague about file locations. Do not delegate to a subagent — the reviewer must be able to quote specifics directly.
+
+### 4. Critique along six axes
+
+For each axis, either cite a **concrete element** of the plan (specific file, step, or decision) with the problem and a proposed fix, or **explicitly pass** with one sentence of reasoning. No vague complaints. No "looks good overall" summaries.
+
+Grade every finding with a severity label (same scale as the `ui-stress-test-review` skill):
+
+- **Blocker** — the plan as written produces broken, unsafe, or unshippable results.
+- **Major** — works, but causes wrong behavior in realistic cases, poor project fit, or avoidable rework.
+- **Minor** — local polish or consistency issue with a clear small fix.
+
+Report findings ordered by severity, not by axis.
+
+#### Axis 1 — Correctness & consistency
+
+- Are the steps correct in the order given? Any step that depends on a later step?
+- Edge cases missed: empty inputs, concurrent callers, partial failures, retries, timeouts, cancellation.
+- Wrong assumptions about third-party APIs, file system behavior, timing, or ordering.
+- Race conditions or shared-state hazards.
+- Steps inside the plan that contradict each other.
+- Claims in the plan not supported by the code you just read.
+- **Security**: injection through new inputs, missing authorization on new endpoints or surfaces, secrets in code or logs.
+- **Performance**: does the plan put allocation-heavy or unbounded work on a hot path or inside a loop over user-sized data?
+- **Backward compatibility**: breaking changes to persisted data, public API contracts, or wire formats — does the plan need a migration or rollback story?
+- **Verifiability**: is there a plain way to confirm the change worked — a script to run, a log line to check, a before/after comparison? Match rigor to the project; don't demand production-grade test suites where a smoke check is enough.
+
+#### Axis 2 — Fit with the existing project
+
+*Before passing this axis: if the plan doesn't name specific files, grep for the affected subsystem and read a representative neighbor. Fit cannot be assessed without looking at surrounding code.*
+
+- Does the plan match existing patterns (module layout, naming, error handling, async style)?
+- Does it respect project conventions in `.cursor/rules/` (language choice, style, dependency policy)?
+- Does it introduce a pattern that conflicts with neighboring code?
+- Does the plan's abstraction level match the rest of the codebase?
+- Would a future reader find the result consistent with its surroundings, or jarring?
+
+#### Axis 3 — Simplicity & bloat
+
+*Scope: what the plan **adds**. Cleanup of existing code belongs in axis 4.*
+
+- New files with only one caller.
+- New dependencies — is each load-bearing, or could existing code cover it?
+- New config flags, feature flags, env vars — is each actually used by something concrete now?
+- New abstractions (interfaces, factories, wrappers) — count real call sites; flag any with fewer than 2.
+- Speculative generality: parameters/options that no current caller needs.
+- Is there a materially simpler approach that achieves the same outcome?
+
+#### Axis 4 — Refactor opportunities
+
+*Scope: **existing** code the plan touches or reveals. Additions the plan makes belong in axis 3.*
+
+- **In-scope adjacent cleanup**: code the plan touches that should be cleaned up in the same PR. For each: what, why, approximate size.
+- **Out-of-scope adjacent cleanup**: code that is tempting to clean up but should be deferred. For each: why deferring is correct.
+- Dead code that the plan's changes make removable now.
+- Naming that becomes wrong after the change and should be updated in the same PR.
+- Duplication the plan is about to extend — worth collapsing first?
+
+#### Axis 5 — Tech debt
+
+- Debt paid by this plan (name it).
+- Debt newly introduced: TODO markers, shortcuts, missing tests, `any` types, silent catches. Is each justified?
+- Debt the plan visibly touches but leaves in place — should it be addressed here?
+- Migration or deprecation debts the plan could reasonably include without scope creep.
+
+#### Axis 6 — UI/UX (conditional)
+
+*Activates only when the plan touches UI surfaces (components, screens, styles). Otherwise pass explicitly in one sentence, like any other axis. Check only what is decidable at plan time — rendering-dependent concerns (clipping, spacing, visual hierarchy as rendered) belong to the post-implementation `ui-stress-test-review` skill, not here.*
+
+- **State coverage**: does the plan account for loading, empty, error, long-content, and disabled states, or only the happy path?
+- **Reuse vs. invention**: does the plan reuse existing components, tokens, and layout patterns, or introduce new ones without justification?
+- **Task fit**: does the planned screen answer the user's primary question first, or does the plan describe chrome and decoration?
+- **Accessibility intent**: keyboard reachability, labels, and no color-only meaning planned in from the start.
+- **Slop risk**: flag plan language that seeds generic layouts — wall-of-cards, decorative hero panels, vague metric dashboards.
+
+When this axis activates, the revised plan **must** include a post-implementation verification step that invokes the `ui-stress-test-review` skill on the rendered result.
+
+---
+
+### 5. Ask clarifying questions inline
+
+Whenever a finding depends on user intent — which tradeoff to make, which style to match, whether to expand scope — ask **before producing the revised plan**. Use the environment's structured question mechanism if one exists; otherwise fall back to plain text with 2–4 suggested answers plus a free-text option:
+
+```
+Q: [Question]
+  a) [Option A]
+  b) [Option B]
+  c) [Option C — or describe your preference]
+```
+
+Rules:
+- Maximum **5 questions** across the whole review (not per axis).
+- Only ask questions that would materially change a finding or the revised plan.
+- If uncertainty remains after the cap is reached, note the assumption inline inside the finding: *"assumes X — flag if wrong"*.
+- Do not ask questions for the sake of questions.
+
+Wait for the user's answers before writing the revised plan. If answers cannot be obtained (non-interactive run, no response), do not stall: choose the recommended option for each question, mark it as `assumed` in the findings ledger, and proceed.
+
+---
+
+### 6. Produce the revised plan
+
+After receiving answers (or immediately if there were no questions), return:
+
+**1. Updated plan** — full, standalone, ready to execute. Do not require the user to reconstruct it from diffs. If the plan under review exists as a file (e.g. `.cursor/plans/*.md`), write the revised plan back to that file and summarize the changes in chat; otherwise deliver it standalone in chat.
+
+**2. Findings ledger** — every finding from step 4 appears here, with its severity, disposition, and what changed in the plan as a result. No silent drops.
+
+| Finding | Severity | Disposition | Change to plan |
+|---------|----------|-------------|----------------|
+| ...     | Blocker / Major / Minor | accepted / mitigated / rejected / assumed | ... |
+
+Rules:
+- Rejecting a **Blocker** requires either explicit user sign-off or a cited reason why it is not actually a blocker.
+- Use `assumed` for dispositions decided without a user answer (see step 5).
+- If the output surface cannot render markdown tables (e.g. plan files), use an equivalent structured list — one entry per finding with the same four fields.
+
+**Stop here.** Return control to the user. Do not start implementing the revised plan — implementation is a separate invocation.
+
+---
+
+## Anti-patterns (refuse these)
+
+- Rubber-stamp passes across all axes with no specifics.
+- Findings that don't cite a concrete plan element.
+- Silently dropping findings in the revised plan (use the findings ledger).
+- Restating a clear plan as a steelman when step 2 should have been skipped.
+- Delegating to a subagent — read and quote directly.
+- Attacking a strawman: if you misread the plan, fix the reading and re-critique.
+
+---
+
+## Worked example (calibration — not a template to copy)
+
+**Original plan (summary):** "Add a `/export` endpoint to `server.ts` that dumps the `sessions` table as CSV. Add a new `src/core/export/csvWriter.ts` utility with a configurable delimiter and header-casing options."
+
+**Findings (ordered by severity):**
+
+- **[Blocker] Axis 1 — Correctness.** Plan doesn't say how large `sessions` can get. For >100 k rows the CSV build blows memory. *Fix: stream rows via async iterator.* Verifiability: `curl /export | wc -l` against a known row count.
+- **[Major] Axis 3 — Simplicity.** Configurable delimiter and header-casing have no current caller. Speculative generality — drop both until a second caller exists.
+- **[Major] Axis 4 — Refactor.** In-scope: `src/core/api/server.ts:142` already has near-duplicate CSV logic for the `audits` endpoint; collapse both into the new utility. Out-of-scope: the broader route-registration rewrite — tempting but bigger than this PR.
+- **[Minor] Axis 2 — Fit.** Existing exports in `src/core/api/` use route files with snake_case symbols; plan proposes camelCase `csvWriter.ts`. Inconsistent.
+- **Axis 5 — Tech debt.** Pass: no new debt once the streaming fix lands and the speculative options are dropped.
+- **Axis 6 — UI/UX.** Pass: the plan touches no UI surfaces.
+
+**Inline question:**
+
+```
+Q: Collapse the existing `audits` CSV logic into the new utility in this PR?
+  a) Yes — do it now
+  b) No — defer to a separate PR
+  c) Other (describe)
+```
+
+**Revised plan:** single streaming `csvWriter` (no options), used by both `/export` and `/audits`, file named to match existing snake_case convention.
+
+**Findings ledger:**
+
+| Finding | Severity | Disposition | Change to plan |
+|---------|----------|-------------|----------------|
+| Streaming for large exports | Blocker | accepted | build CSV via async iterator; verify with `curl \| wc -l` |
+| Drop configurable options | Major | accepted | utility takes no options |
+| Collapse `audits` duplicate | Major | accepted (per user answer) | both endpoints use the new utility |
+| Broader route-registration rewrite | Major | rejected — out of scope for this PR | none |
+| File/symbol casing | Minor | accepted | file renamed to snake_case |
+
+---
+
+## Edge cases
+
+- **No plan in context**: ask the user to paste or reference it. Do not fabricate.
+- **Iteration**: re-invokable. On a re-review of a revision, do a delta review — scope it to the steps that changed plus anything a prior finding touched, and say so. Only rerun the full flow if the revision restructured the plan.
+- **Very large plan**: critique the highest-leverage axes first and tell the user which axes were deferred and why.
+- **Very small plan**: output scales with plan size. For a few-line plan, terse one-sentence passes on most axes are the expected result — do not mirror the worked example's volume.

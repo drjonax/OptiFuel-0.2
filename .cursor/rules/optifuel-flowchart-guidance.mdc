@@ -1,0 +1,54 @@
+---
+description: >-
+  Guidance for building OptiFuel React Flow diagrams with clean orthogonal
+  routing, custom node types, and design-language consistency.
+alwaysApply: false
+---
+
+# OptiFuel Flowchart Guidance
+
+Use this rule for workflow diagrams and React Flow implementations.
+
+## Diagram Styling
+
+- Match OptiFuel design language: cream canvas `#eeefe9`, flat white nodes, olive text, hairline borders.
+- Typography: IBM Plex Sans Variable.
+- Node surfaces: `#ffffff` with `1px` border `#bfc1b7`, radius `6px`.
+- Sequence/dwell nodes can be pill/full-radius for compact process markers.
+- No drop shadows.
+
+## Node Types
+
+Implement custom node types when needed:
+- `FacilityNode` (storage, reactor, corridor, etc.)
+- `MachineNode` (transport/actor)
+- `StepNode` (sequence markers such as 1, 2, 3)
+- `DwellNode` (small process/dwell indicators)
+
+## Edges and Routing
+
+- Use `smoothstep` edges (orthogonal look), not free curved spaghetti.
+- Define explicit `Handle` positions (`Left/Right/Top/Bottom`) on custom nodes.
+- For left-to-right flows, prefer Right -> Left handle connections.
+- Edge color in muted hairline family (`#bfc1b7` / `#6c6e63`) with subtle arrowheads.
+- Consider edge labels for step numbers to reduce node clutter.
+
+## Layout Strategy
+
+- Pick one primary direction (LR or TB) and keep it consistent.
+- Snap positions to a visible grid (24px/48px increments).
+- Keep generous spacing between major facilities (80px+).
+- Group major phases in clear tiers/swimlanes when it improves readability.
+- If auto-layout is used (`dagre`/`elkjs`), configure for strict directional flow.
+
+## React Flow Setup Baseline
+
+- Set React Flow background to `#eeefe9`.
+- Use subtle dotted background (`#dcdfd2`) if a grid is needed.
+- Keep controls flat: bordered, rounded, no shadows.
+
+## Quality Checks
+
+- Paths are readable at a glance; no node-edge overlaps.
+- Diagram communicates chronology/physical flow without explanation.
+- Visual style stays consistent with OptiFuel UI guidance.

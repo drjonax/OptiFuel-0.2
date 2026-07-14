@@ -1,0 +1,38 @@
+---
+description: >-
+  Adversarial review for inferior rendered UI. Invoke when the user asks to
+  stress-test, red-team, critique, harden, or review a weak screen, component,
+  dashboard, layout, web app, screenshot, or canvas.
+alwaysApply: false
+---
+
+# UI Stress-Test Review
+
+When the user says a UI design is inferior, weak, generic, sloppy, or asks for a UI stress test, invoke the project skill `ui-stress-test-review`.
+
+Require concrete rendered evidence first: a live URL, screenshot, video, component/page file that can be rendered, or canvas file. Do not review from a vague description unless the user explicitly asks for conceptual critique.
+
+For OptiFuel UI under `ui/`, also apply `ui-generation.mdc` so findings are grounded in existing project patterns.
+
+Focus on concrete rendered failures, not style preferences. Each finding must identify a specific element/region and provide a concrete fix.
+
+Review across these axes:
+- Task fit and information hierarchy
+- Layout quality and rendering integrity
+- Project fit and consistency with existing patterns
+- State coverage (loading, empty, error, long-content, disabled)
+- Accessibility and interaction quality
+- "Generic AI slop" signals (decorative panels, wall-of-cards, fake charts, placeholder copy)
+
+Severity scale:
+- **Blocker**: unusable or primary task obscured
+- **Major**: works but causes wrong interpretation or high friction
+- **Minor**: local polish/consistency issue with clear small fix
+
+Output shape:
+- Findings first, ordered by severity
+- Short "Better UI Direction" paragraph
+- Concrete patch plan (implementation + verification)
+- Residual risk/evidence gaps
+
+Implement fixes only if the user explicitly asks for implementation after the review.

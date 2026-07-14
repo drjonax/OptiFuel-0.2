@@ -1,0 +1,376 @@
+schema_version: 4
+id: api_fork_test
+horizon_min: 11000.0
+topology:
+  nodes:
+  - id: fresh_store
+    type: fresh_store
+    unit: shared
+    boundary: source
+    geometry: null
+    attributes: {}
+  - id: corridor_staging
+    type: corridor_staging
+    unit: shared
+    boundary: none
+    geometry: null
+    attributes: {}
+  - id: core_u1
+    type: core
+    unit: U1
+    boundary: none
+    geometry: null
+    attributes: {}
+  - id: core_u2
+    type: core
+    unit: U2
+    boundary: none
+    geometry: null
+    attributes: {}
+  - id: core_u3
+    type: core
+    unit: U3
+    boundary: none
+    geometry: null
+    attributes: {}
+  - id: pool_u1
+    type: interim_pool
+    unit: U1
+    boundary: none
+    geometry: null
+    attributes: {}
+  - id: pool_u2
+    type: interim_pool
+    unit: U2
+    boundary: none
+    geometry: null
+    attributes: {}
+  - id: pool_u3
+    type: interim_pool
+    unit: U3
+    boundary: none
+    geometry: null
+    attributes: {}
+  - id: lts
+    type: lts
+    unit: shared
+    boundary: sink
+    geometry: null
+    attributes: {}
+  edges:
+  - id: fresh_to_staging
+    from: fresh_store
+    to: corridor_staging
+    requires:
+    - fhm_1
+    - corridor_transit
+    duration_min:
+      base_min: 30.0
+      modifiers: []
+  - id: staging_to_core_u1
+    from: corridor_staging
+    to: core_u1
+    requires:
+    - fhm_1
+    - crew_a
+    - corridor_transit
+    duration_min:
+      base_min: 60.0
+      modifiers: []
+  - id: staging_to_core_u2
+    from: corridor_staging
+    to: core_u2
+    requires:
+    - fhm_2
+    - crew_a
+    - corridor_transit
+    duration_min:
+      base_min: 60.0
+      modifiers: []
+  - id: staging_to_core_u3
+    from: corridor_staging
+    to: core_u3
+    requires:
+    - fhm_2
+    - crew_b
+    - corridor_transit
+    duration_min:
+      base_min: 60.0
+      modifiers: []
+  - id: core_u1_to_pool
+    from: core_u1
+    to: pool_u1
+    requires:
+    - fhm_1
+    - crew_a
+    - cask_1
+    duration_min:
+      base_min: 90.0
+      modifiers: []
+  - id: core_u2_to_pool
+    from: core_u2
+    to: pool_u2
+    requires:
+    - fhm_2
+    - crew_a
+    - cask_1
+    duration_min:
+      base_min: 90.0
+      modifiers: []
+  - id: core_u3_to_pool
+    from: core_u3
+    to: pool_u3
+    requires:
+    - fhm_2
+    - crew_b
+    - cask_2
+    duration_min:
+      base_min: 90.0
+      modifiers: []
+  - id: pool_u1_to_lts
+    from: pool_u1
+    to: lts
+    requires:
+    - fhm_1
+    - corridor_transit
+    - cask_1
+    duration_min:
+      base_min: 120.0
+      modifiers: []
+  - id: pool_u2_to_lts
+    from: pool_u2
+    to: lts
+    requires:
+    - fhm_2
+    - corridor_transit
+    - cask_2
+    duration_min:
+      base_min: 120.0
+      modifiers: []
+  - id: pool_u3_to_lts
+    from: pool_u3
+    to: lts
+    requires:
+    - fhm_2
+    - corridor_transit
+    - cask_2
+    duration_min:
+      base_min: 120.0
+      modifiers: []
+entities:
+- id: A1
+  location: fresh_store
+  position: null
+  state:
+    burnup_mwd_kgu: 0.0
+    discharge_time_min: null
+    heat_kw: 1.0
+  history: []
+- id: A2
+  location: fresh_store
+  position: null
+  state:
+    burnup_mwd_kgu: 0.0
+    discharge_time_min: null
+    heat_kw: 1.0
+  history: []
+- id: A3
+  location: fresh_store
+  position: null
+  state:
+    burnup_mwd_kgu: 0.0
+    discharge_time_min: null
+    heat_kw: 1.0
+  history: []
+resources:
+- id: fhm_1
+  type: fhm
+  capacity: 1
+  calendar: []
+  shared_by:
+  - U1
+  - U2
+  - U3
+  holds_entities: false
+- id: fhm_2
+  type: fhm
+  capacity: 1
+  calendar: []
+  shared_by:
+  - U1
+  - U2
+  - U3
+  holds_entities: false
+- id: corridor_transit
+  type: corridor_transit
+  capacity: 1
+  calendar: []
+  shared_by:
+  - U1
+  - U2
+  - U3
+  holds_entities: false
+- id: crew_a
+  type: crew
+  capacity: 1
+  calendar: []
+  shared_by:
+  - U1
+  - U2
+  - U3
+  holds_entities: false
+- id: crew_b
+  type: crew
+  capacity: 1
+  calendar: []
+  shared_by:
+  - U1
+  - U2
+  - U3
+  holds_entities: false
+- id: cask_1
+  type: cask
+  capacity: 1
+  calendar: []
+  shared_by:
+  - U1
+  - U2
+  - U3
+  holds_entities: false
+- id: cask_2
+  type: cask
+  capacity: 1
+  calendar: []
+  shared_by:
+  - U1
+  - U2
+  - U3
+  holds_entities: false
+unit_modes:
+- unit: U1
+  windows:
+  - from: 1440.0
+    to: 2880.0
+    mode: refueling
+- unit: U2
+  windows:
+  - from: 2880.0
+    to: 4320.0
+    mode: refueling
+- unit: U3
+  windows:
+  - from: 4320.0
+    to: 5760.0
+    mode: refueling
+constraints:
+- id: cap_staging
+  scope: node
+  target: corridor_staging
+  type: capacity
+  predicate: {}
+  hard: true
+  params:
+    max_entities: 2
+- id: thermal_pool_u1
+  scope: node
+  target: pool_u1
+  type: thermal
+  predicate: {}
+  hard: true
+  params:
+    max_heat_kw: 500
+- id: thermal_lts
+  scope: node
+  target: lts
+  type: thermal
+  predicate: {}
+  hard: true
+  params:
+    max_heat_kw: 2000
+- id: resource_fhm
+  scope: resource
+  target: fhm_1
+  type: resource
+  predicate: {}
+  hard: true
+  params:
+    max_concurrent: 1
+- id: temporal_horizon
+  scope: global
+  target: reference_plant
+  type: temporal
+  predicate: {}
+  hard: true
+  params:
+    earliest_min: 0
+    latest_min: 10080
+- id: regulatory_cooling
+  scope: global
+  target: reference_plant
+  type: regulatory
+  predicate: {}
+  hard: false
+  params:
+    min_cooling_min: 100
+    required_cooling_min: 120
+physics:
+  decay_models:
+  - entity_id: A1
+    table:
+    - time_min: 0.0
+      heat_kw: 1.0
+    - time_min: 5000.0
+      heat_kw: 15.0
+  - entity_id: A2
+    table:
+    - time_min: 0.0
+      heat_kw: 1.0
+    - time_min: 5000.0
+      heat_kw: 14.0
+  - entity_id: A3
+    table:
+    - time_min: 0.0
+      heat_kw: 1.0
+    - time_min: 5000.0
+      heat_kw: 13.0
+  core_exit_states:
+  - entity_id: A1
+    cycle: 1
+    burnup_mwd_kgu: 25.0
+    discharge_time_min: 4000.0
+  - entity_id: A2
+    cycle: 1
+    burnup_mwd_kgu: 24.0
+    discharge_time_min: 4100.0
+  - entity_id: A3
+    cycle: 1
+    burnup_mwd_kgu: 23.0
+    discharge_time_min: 4200.0
+arrivals:
+- entity_id: A4
+  node_id: fresh_store
+  t_min: 720.0
+  state:
+    heat_kw: 1.0
+departures:
+- entity_id: A1
+  node_id: lts
+  t_min: 9000.0
+objective:
+  terms:
+  - metric: outage_duration_h
+    weight: 0.5
+    normalise:
+      ref: 720
+  - metric: peak_storage_heat_kw
+    weight: 0.3
+    normalise:
+      range:
+      - 0
+      - 2000
+  - metric: handling_ops_count
+    weight: 0.2
+    normalise:
+      ref: 100
+lineage_parent_id: reference_plant
+forked_at_min: 0.0

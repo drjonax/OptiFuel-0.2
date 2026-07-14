@@ -1,0 +1,56 @@
+---
+description: >-
+  OptiFuel UI design language guidance for future UI work. Applies a cream
+  canvas, IBM Plex typography, flat bordered cards, restrained accents, and
+  anti-slop constraints for screens and components.
+alwaysApply: false
+---
+
+# OptiFuel UI Design Language
+
+Use this rule when designing or implementing UI surfaces in OptiFuel.
+
+## Core Visual Direction
+
+- Treat the product as an "engineering sketchbook" aesthetic: warm cream canvas, calm olive text, one strong CTA accent.
+- Prefer clarity and task fit over decoration.
+- Keep visual language flat and structured; avoid trend-heavy styling.
+
+## Non-Negotiables
+
+- Canvas/background: `#eeefe9`
+- Primary ink/headline: `#23251d`
+- Body text: `#4d4f46`
+- Card surface: `#ffffff` with `1px` border `#bfc1b7`
+- Primary CTA accent: `#f7a501` (pressed `#dd9001`)
+- Font family: IBM Plex Sans Variable
+- Border radius vocabulary: 2px / 4px / 6px / 8px / full pill
+- No drop shadows on cards or layout containers
+
+## Layout and Hierarchy
+
+- Use consistent spacing rhythm (8px base, with 16/24/32/80 for larger gaps).
+- Keep grouping obvious with alignment and whitespace, not decoration.
+- Maintain clear information hierarchy: primary task first, metadata secondary.
+- Favor reusable component patterns over one-off visuals.
+
+## Accessibility and UX Baseline
+
+- Ensure visible focus states and keyboard reachability.
+- Avoid color-only meaning for status.
+- Keep touch targets practical (around 40px minimum where possible).
+- Include relevant UI states: loading, empty, error, long-content, disabled.
+
+## Anti-Slop Constraints
+
+- Avoid wall-of-cards dashboards with weak hierarchy.
+- Avoid decorative gradients/mesh/glassmorphism.
+- Avoid fake chart placeholders and vague "hero" ornamentation.
+- Keep accent colors restrained; yellow CTA should remain the dominant accent.
+
+## Output Expectation
+
+When generating UI, include:
+- Why the layout supports the user's primary task
+- Which existing patterns/tokens are reused
+- How key edge states are handled

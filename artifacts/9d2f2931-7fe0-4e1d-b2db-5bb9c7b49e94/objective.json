@@ -1,0 +1,1 @@
+{"terms":[{"metric":"handling_ops_count","normalized_value":0.05,"raw_value":5.0,"weight":0.2,"weighted_value":0.01},{"metric":"outage_duration_h","normalized_value":0.0986111111,"raw_value":71.0,"weight":0.5,"weighted_value":0.0493055555},{"metric":"peak_storage_heat_kw","normalized_value":0.0,"raw_value":0.0,"weight":0.3,"weighted_value":0.0}],"total":0.0593055555}

@@ -1,0 +1,40 @@
+schema_version: 4
+scenario: reference_plant
+horizon_min: 20160
+moves:
+  - entity: A1
+    edge: fresh_to_staging
+    start: 100
+  - entity: A1
+    edge: staging_to_core_u1
+    start: 1500
+  - entity: A1
+    edge: core_u1_to_pool
+    start: 3000
+  - entity: A1
+    edge: pool_u1_to_lts
+    start: 5000
+  - entity: A2
+    edge: fresh_to_staging
+    start: 200
+  - entity: A2
+    edge: staging_to_core_u2
+    start: 3000
+  - entity: A2
+    edge: core_u2_to_pool
+    start: 6000
+  - entity: A2
+    edge: pool_u2_to_lts
+    start: 9000
+  - entity: A3
+    edge: fresh_to_staging
+    start: 300
+  - entity: A3
+    edge: staging_to_core_u3
+    start: 4500
+  - entity: A3
+    edge: core_u3_to_pool
+    start: 8000
+  - entity: A3
+    edge: pool_u3_to_lts
+    start: 12000
