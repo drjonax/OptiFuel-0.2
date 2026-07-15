@@ -1,6 +1,29 @@
 {
   "components": {
     "schemas": {
+      "ConstraintParamLock": {
+        "properties": {
+          "constraint_id": {
+            "title": "Constraint Id",
+            "type": "string"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "locked": {
+            "default": true,
+            "title": "Locked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "entity_id",
+          "constraint_id"
+        ],
+        "title": "ConstraintParamLock",
+        "type": "object"
+      },
       "ForkRequest": {
         "properties": {
           "amendments": {
@@ -65,8 +88,152 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "LockEffectiveRequest": {
+        "properties": {
+          "constraint_param_locks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ConstraintParamLock"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Constraint Param Locks"
+          },
+          "lock_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Mode"
+          },
+          "scenario_path": {
+            "title": "Scenario Path",
+            "type": "string"
+          },
+          "schedule_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Path"
+          },
+          "structure_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Structure Mode"
+          }
+        },
+        "required": [
+          "scenario_path"
+        ],
+        "title": "LockEffectiveRequest",
+        "type": "object"
+      },
+      "MoveLock": {
+        "properties": {
+          "edge": {
+            "title": "Edge",
+            "type": "string"
+          },
+          "entity": {
+            "title": "Entity",
+            "type": "string"
+          },
+          "locked_fields": {
+            "items": {
+              "const": "start_min",
+              "type": "string"
+            },
+            "title": "Locked Fields",
+            "type": "array"
+          },
+          "occurrence_index": {
+            "default": 0,
+            "title": "Occurrence Index",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entity",
+          "edge"
+        ],
+        "title": "MoveLock",
+        "type": "object"
+      },
       "OptimizeRequest": {
         "properties": {
+          "constraint_param_locks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ConstraintParamLock"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Constraint Param Locks"
+          },
+          "lock_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Mode"
+          },
+          "move_locks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MoveLock"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Move Locks"
+          },
+          "scenario_locks": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenario Locks"
+          },
           "scenario_path": {
             "title": "Scenario Path",
             "type": "string"
@@ -86,6 +253,17 @@
               }
             ],
             "title": "Seed Schedule Path"
+          },
+          "structure_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Structure Mode"
           },
           "time_limit_sec": {
             "default": 5.0,
@@ -255,6 +433,110 @@
           }
         },
         "summary": "Optimize Endpoint"
+      }
+    },
+    "/runs/optimize/capabilities": {
+      "get": {
+        "operationId": "optimize_capabilities_runs_optimize_capabilities_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scenario_path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scenario Path"
+            }
+          },
+          {
+            "in": "query",
+            "name": "schedule_path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Schedule Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Optimize Capabilities Runs Optimize Capabilities Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Optimize Capabilities"
+      }
+    },
+    "/runs/optimize/locks/effective": {
+      "post": {
+        "operationId": "optimize_lock_effective_runs_optimize_locks_effective_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LockEffectiveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Optimize Lock Effective Runs Optimize Locks Effective Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Optimize Lock Effective"
       }
     },
     "/runs/simulate": {

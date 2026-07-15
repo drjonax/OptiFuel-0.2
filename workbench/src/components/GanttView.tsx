@@ -21,10 +21,11 @@ export function GanttView({
   onSelectMove,
   disabled,
 }: Props) {
-  const maxEnd = moves.reduce((max, move) => {
+  const maxMoveEnd = moves.reduce((max, move) => {
     const duration = moveDuration(move.edge, edges);
     return Math.max(max, move.start + duration);
-  }, 100);
+  }, 0);
+  const maxEnd = Math.max(1, maxMoveEnd, scrubTime);
 
   if (moves.length === 0) {
     return (
@@ -41,8 +42,11 @@ export function GanttView({
       <ul role="list">
         {moves.map((move) => {
           const duration = moveDuration(move.edge, edges);
-          const left = (move.start / maxEnd) * 100;
-          const width = Math.max(4, (duration / maxEnd) * 100);
+          const rawLeft = (move.start / maxEnd) * 100;
+          const left = Math.min(100, Math.max(0, rawLeft));
+          const minWidth = 0.6;
+          const rawWidth = (duration / maxEnd) * 100;
+          const width = Math.min(Math.max(minWidth, rawWidth), Math.max(0, 100 - left));
           const selected = selectedMoveIndex === move.index;
           const active = activeMoveIndices.has(move.index);
           const completed = completedMoveIndices.has(move.index);

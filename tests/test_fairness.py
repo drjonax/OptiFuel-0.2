@@ -83,3 +83,13 @@ def test_fairness_second_contender_starts_after_resource_release() -> None:
     result = simulate(scenario, schedule, runtime_mode="continue_and_report")
     started_entities = {event.entity for event in result.timeline if event.kind == "move_started"}
     assert started_entities == {"E_A", "E_B"}
+
+
+def test_same_start_contention_is_infeasible_not_silently_dropped() -> None:
+    scenario, schedule = _contention_fixture()
+    result = simulate(scenario, schedule, runtime_mode="continue_and_report")
+    started_entities = {event.entity for event in result.timeline if event.kind == "move_started"}
+
+    assert started_entities == {"E_A"}
+    assert result.failed
+    assert any(v.constraint_id == "schedule_executability" and v.hard for v in result.violations)

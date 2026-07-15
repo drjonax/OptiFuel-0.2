@@ -9,12 +9,16 @@ from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from fuelflow.engine.opt.locks import ConstraintParamLock, MoveLock, OptimizeLockContract
 
 from fuelflow.services import (
     ServiceError,
+    get_optimize_lock_capabilities,
     load_schedule_file,
     load_scenario_file,
+    resolve_optimize_lock_effective,
     run_fork,
     run_optimization,
     run_simulation,
@@ -70,6 +74,66 @@ class OptimizeRequest(BaseModel):
     seed: int = 42
     time_limit_sec: float = 5.0
     seed_schedule_path: str | None = None
+    lock_mode: str | None = None
+    structure_mode: str | None = None
+    move_locks: list[MoveLock] | None = None
+    scenario_locks: list[str] | None = None
+    constraint_param_locks: list[ConstraintParamLock] | None = None
+
+    @field_validator("lock_mode")
+    @classmethod
+    def validate_lock_mode(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in {"legacy", "enforced"}:
+            raise ValueError("lock_mode must be legacy or enforced")
+        return value
+
+    @field_validator("structure_mode")
+    @classmethod
+    def validate_structure_mode(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in {"locked", "unlocked"}:
+            raise ValueError("structure_mode must be locked or unlocked")
+        return value
+
+    def to_lock_contract(self) -> OptimizeLockContract | None:
+        if self.lock_mode is None:
+            return None
+        return OptimizeLockContract(
+            lock_mode=self.lock_mode,  # type: ignore[arg-type]
+            structure_mode=self.structure_mode,  # type: ignore[arg-type]
+            move_locks=self.move_locks or [],
+            scenario_locks=self.scenario_locks or [],
+            constraint_param_locks=self.constraint_param_locks or [],
+        )
+
+
+class LockEffectiveRequest(BaseModel):
+    scenario_path: str
+    schedule_path: str | None = None
+    lock_mode: str | None = None
+    structure_mode: str | None = None
+    constraint_param_locks: list[ConstraintParamLock] | None = None
+
+    @field_validator("lock_mode")
+    @classmethod
+    def validate_lock_mode(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in {"legacy", "enforced"}:
+            raise ValueError("lock_mode must be legacy or enforced")
+        return value
+
+    def to_lock_contract(self) -> OptimizeLockContract | None:
+        if self.lock_mode is None:
+            return None
+        return OptimizeLockContract(
+            lock_mode=self.lock_mode,  # type: ignore[arg-type]
+            structure_mode=self.structure_mode,  # type: ignore[arg-type]
+            constraint_param_locks=self.constraint_param_locks or [],
+        )
 
 
 class ForkRequest(BaseModel):
@@ -188,16 +252,66 @@ def simulate_endpoint(body: SimulateRequest) -> dict[str, Any]:
         _handle_error(exc)
 
 
+@app.get("/runs/optimize/capabilities")
+def optimize_capabilities(
+    scenario_path: str | None = None,
+    schedule_path: str | None = None,
+) -> dict[str, Any]:
+    if scenario_path is None:
+        from fuelflow.engine.opt.locks import lock_capabilities
+
+        return lock_capabilities()
+    try:
+        return get_optimize_lock_capabilities(
+            WORKSPACE / scenario_path,
+            WORKSPACE,
+            schedule_path=WORKSPACE / schedule_path if schedule_path else None,
+        )
+    except Exception as exc:
+        _handle_error(exc)
+
+
+@app.post("/runs/optimize/locks/effective")
+def optimize_lock_effective(body: LockEffectiveRequest) -> dict[str, Any]:
+    try:
+        lock_contract = body.to_lock_contract()
+        if lock_contract is None:
+            lock_contract = OptimizeLockContract(lock_mode="enforced", structure_mode="locked")
+        OptimizeLockContract.model_validate(lock_contract.model_dump())
+        return resolve_optimize_lock_effective(
+            WORKSPACE / body.scenario_path,
+            WORKSPACE,
+            schedule_path=WORKSPACE / body.schedule_path if body.schedule_path else None,
+            lock_contract=lock_contract,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "lock_contract_invalid", "message": str(exc)},
+        ) from exc
+    except Exception as exc:
+        _handle_error(exc)
+
+
 @app.post("/runs/optimize")
 def optimize_endpoint(body: OptimizeRequest) -> dict[str, Any]:
     try:
+        lock_contract = body.to_lock_contract()
+        if lock_contract is not None:
+            OptimizeLockContract.model_validate(lock_contract.model_dump())
         return run_optimization(
             WORKSPACE / body.scenario_path,
             WORKSPACE,
             seed=body.seed,
             time_limit_sec=body.time_limit_sec,
             seed_schedule_path=WORKSPACE / body.seed_schedule_path if body.seed_schedule_path else None,
+            lock_contract=lock_contract,
         )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "lock_contract_invalid", "message": str(exc)},
+        ) from exc
     except Exception as exc:
         _handle_error(exc)
 

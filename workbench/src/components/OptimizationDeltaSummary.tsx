@@ -4,7 +4,7 @@ import { describeScheduleChanges } from "../lib/optimizationDiff";
 type Props = {
   delta: OptimizationDelta | null;
   optimizeOutcome?: "feasible" | "infeasible_or_timeout" | null;
-  optimizeReason?: "infeasible" | "timeout" | null;
+  optimizeReason?: "infeasible" | "timeout" | "structure_violation" | null;
 };
 
 export function OptimizationDeltaSummary({ delta, optimizeOutcome, optimizeReason }: Props) {
@@ -149,7 +149,7 @@ function ViolationDeltaBlock({
         )}
       </div>
 
-      {violationDelta.solvedByConstraint.length > 0 && (
+      {violationDelta.solvedByConstraint.length > 0 && !showAfterAsBaseline && (
         <div className="optimization-delta-section">
           <h3>Solved constraints</h3>
           <ul className="optimization-delta-constraints">

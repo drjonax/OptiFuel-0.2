@@ -166,6 +166,34 @@ def simulate(
                     if runtime_mode == "fail_fast":
                         return
 
+    def emit_schedule_executability_violation(t_min: float, move: ActiveMove, reason: str) -> None:
+        nonlocal failed
+        violation = Violation(
+            rule_id="C-schedule-executability",
+            constraint_id="schedule_executability",
+            scope="global",
+            target=move.edge,
+            hard=True,
+            message=(
+                f"Move {move.entity}:{move.edge} could not start at {move.start_min}: {reason}"
+            ),
+            entity_ids=[move.entity],
+            t_min=t_min,
+        )
+        violations.append(violation)
+        timeline.append(
+            TimelineEvent(
+                t_min=t_min,
+                entity=None,
+                kind="constraint_violated",
+                detail={
+                    "constraint_id": "schedule_executability",
+                    "message": violation.message,
+                },
+            )
+        )
+        failed = True
+
     for t_min in times:
         if t_min > scenario.horizon_min:
             break
@@ -234,18 +262,48 @@ def simulate(
             from_node = node_map[edge.from_node]
             if from_node.type == "core" and from_node.unit != "shared":
                 if not _unit_mode_allows_refueling(scenario, from_node.unit, t_min):
+                    emit_schedule_executability_violation(
+                        t_min,
+                        move,
+                        f"unit mode forbids refueling for unit {from_node.unit}",
+                    )
+                    if runtime_mode == "fail_fast":
+                        break
                     continue
             usage = resource_usage()
-            blocked = False
+            blocked_resource: str | None = None
             for res in move.resources:
                 cap = next((r.capacity for r in scenario.resources if r.id == res), 1)
                 if usage.get(res, 0) >= cap:
-                    blocked = True
-            if blocked:
+                    blocked_resource = res
+                    break
+            if blocked_resource is not None:
+                emit_schedule_executability_violation(
+                    t_min,
+                    move,
+                    f"resource {blocked_resource} capacity exceeded at start time",
+                )
+                if runtime_mode == "fail_fast":
+                    break
                 continue
             if move.entity not in entities:
+                emit_schedule_executability_violation(
+                    t_min, move, "entity is unavailable at start time"
+                )
+                if runtime_mode == "fail_fast":
+                    break
                 continue
             if entities[move.entity].location != edge.from_node:
+                emit_schedule_executability_violation(
+                    t_min,
+                    move,
+                    (
+                        f"entity at {entities[move.entity].location}, "
+                        f"expected {edge.from_node}"
+                    ),
+                )
+                if runtime_mode == "fail_fast":
+                    break
                 continue
             active_moves.append(move)
             handling_ops += 1

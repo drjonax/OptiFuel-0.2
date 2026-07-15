@@ -16,6 +16,8 @@ REQUIRED_PATHS = {
     "/schedules/{schedule_id}",
     "/runs/simulate",
     "/runs/optimize",
+    "/runs/optimize/capabilities",
+    "/runs/optimize/locks/effective",
     "/scenarios/fork",
 }
 

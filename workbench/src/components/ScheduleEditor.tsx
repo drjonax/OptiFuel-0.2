@@ -79,6 +79,30 @@ export function ScheduleEditor({
     onChange({ ...data, moves: [...moves, { entity: "", edge: "", start: 0 }] });
   };
 
+  const moveRow = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= moves.length) return;
+    const next = [...moves];
+    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+    onChange({ ...data, moves: next });
+    if (selectedMoveIndex === index) {
+      onSelectMove(targetIndex);
+    } else if (selectedMoveIndex === targetIndex) {
+      onSelectMove(index);
+    }
+  };
+
+  const deleteRow = (index: number) => {
+    const next = moves.filter((_, i) => i !== index);
+    onChange({ ...data, moves: next });
+    if (next.length === 0 || selectedMoveIndex === null) return;
+    if (selectedMoveIndex === index) {
+      onSelectMove(Math.min(index, next.length - 1));
+    } else if (selectedMoveIndex > index) {
+      onSelectMove(selectedMoveIndex - 1);
+    }
+  };
+
   return (
     <div className="schedule-editor">
       <h2>Schedule Editor</h2>
@@ -90,12 +114,13 @@ export function ScheduleEditor({
               <th scope="col">Edge</th>
               <th scope="col">Start (min)</th>
               <th scope="col">State</th>
+              <th scope="col">Actions</th>
             </tr>
           </thead>
           <tbody>
             {moves.length === 0 ? (
               <tr>
-                <td colSpan={4} className="empty">
+                <td colSpan={5} className="empty">
                   No moves yet.
                 </td>
               </tr>
@@ -143,6 +168,46 @@ export function ScheduleEditor({
                       <span className={`move-state ${active ? "in-progress" : "planned"}`}>
                         {active ? "In progress" : "Planned"}
                       </span>
+                    </td>
+                    <td>
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-compact"
+                          aria-label={`Move row ${index + 1} up`}
+                          disabled={disabled || index === 0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            moveRow(index, "up");
+                          }}
+                        >
+                          Up
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-compact"
+                          aria-label={`Move row ${index + 1} down`}
+                          disabled={disabled || index === moves.length - 1}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            moveRow(index, "down");
+                          }}
+                        >
+                          Down
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-compact"
+                          aria-label={`Delete row ${index + 1}`}
+                          disabled={disabled}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteRow(index);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

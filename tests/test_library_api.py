@@ -50,7 +50,7 @@ def test_library_service_wrappers_match_public_api() -> None:
 def test_library_optimize_and_fork_entrypoints() -> None:
     scenario = Scenario.model_validate(load_yaml(REFERENCE_SCENARIO))
     schedule = Schedule.model_validate(load_yaml(REFERENCE_SCHEDULE))
-    result = optimize(scenario, seed=42, time_limit_sec=2.0)
+    result = optimize(scenario, seed=42, time_limit_sec=2.0, seed_schedule=schedule)
     assert result.outcome in {"feasible", "infeasible_or_timeout"}
     forked = fork_scenario(
         scenario,

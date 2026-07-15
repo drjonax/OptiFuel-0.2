@@ -78,9 +78,9 @@ def test_objective_scoring() -> None:
 
 
 def test_optimizer_deterministic_outcome_class() -> None:
-    scenario, _ = _load()
-    first = optimize(scenario, seed=42, time_limit_sec=2.0)
-    second = optimize(scenario, seed=42, time_limit_sec=2.0)
+    scenario, schedule = _load()
+    first = optimize(scenario, seed=42, time_limit_sec=2.0, seed_schedule=schedule)
+    second = optimize(scenario, seed=42, time_limit_sec=2.0, seed_schedule=schedule)
     assert first.outcome == second.outcome
     assert first.reason == second.reason
 

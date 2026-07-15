@@ -150,13 +150,15 @@ export function computeScheduleChanges(
   beforeMoves: ScheduleMoveRecord[],
   afterMoves: ScheduleMoveRecord[],
 ): ScheduleChangeStats {
-  const beforeByEntity = new Map<string, ScheduleMoveRecord>();
+  const moveKey = (m: ScheduleMoveRecord) => `${m.entity}|${m.edge}`;
+
+  const beforeByKey = new Map<string, ScheduleMoveRecord>();
   for (const m of beforeMoves) {
-    beforeByEntity.set(m.entity, m);
+    beforeByKey.set(moveKey(m), m);
   }
-  const afterByEntity = new Map<string, ScheduleMoveRecord>();
+  const afterByKey = new Map<string, ScheduleMoveRecord>();
   for (const m of afterMoves) {
-    afterByEntity.set(m.entity, m);
+    afterByKey.set(moveKey(m), m);
   }
 
   let added = 0;
@@ -166,11 +168,11 @@ export function computeScheduleChanges(
   let unchanged = 0;
   const changedEntities: string[] = [];
 
-  for (const [entity, afterMove] of afterByEntity) {
-    const beforeMove = beforeByEntity.get(entity);
+  for (const [key, afterMove] of afterByKey) {
+    const beforeMove = beforeByKey.get(key);
     if (!beforeMove) {
       added += 1;
-      changedEntities.push(entity);
+      changedEntities.push(afterMove.entity);
       continue;
     }
     const edgeChanged = beforeMove.edge !== afterMove.edge;
@@ -178,22 +180,25 @@ export function computeScheduleChanges(
     if (edgeChanged && startChanged) {
       rerouted += 1;
       retimed += 1;
-      changedEntities.push(entity);
+      changedEntities.push(afterMove.entity);
     } else if (edgeChanged) {
       rerouted += 1;
-      changedEntities.push(entity);
+      changedEntities.push(afterMove.entity);
     } else if (startChanged) {
       retimed += 1;
-      changedEntities.push(entity);
+      changedEntities.push(afterMove.entity);
     } else {
       unchanged += 1;
     }
   }
 
-  for (const entity of beforeByEntity.keys()) {
-    if (!afterByEntity.has(entity)) {
-      removed += 1;
-      changedEntities.push(entity);
+  for (const key of beforeByKey.keys()) {
+    if (!afterByKey.has(key)) {
+      const beforeMove = beforeByKey.get(key);
+      if (beforeMove) {
+        removed += 1;
+        changedEntities.push(beforeMove.entity);
+      }
     }
   }
 
@@ -205,12 +210,28 @@ export function buildOptimizationDelta(
   optimizeResult: RunResult | null,
   beforeMoves: ScheduleMoveRecord[],
   afterMoves: ScheduleMoveRecord[] | null,
+  optimizeOutcome?: "feasible" | "infeasible_or_timeout" | null,
 ): OptimizationDelta {
   if (!baselineResult) {
     return { violationDelta: null, scheduleChanges: null, baselineAvailable: false };
   }
 
   const beforeViolations = parseViolations(baselineResult.violations);
+  const isInfeasible = optimizeOutcome === "infeasible_or_timeout";
+
+  if (isInfeasible || afterMoves === null) {
+    const beforeCounts = countViolations(beforeViolations);
+    const violationDelta: ViolationDelta = {
+      before: beforeCounts,
+      after: beforeCounts,
+      solved: [],
+      persisting: beforeViolations,
+      newViolations: [],
+      solvedByConstraint: [],
+    };
+    return { violationDelta, scheduleChanges: null, baselineAvailable: true };
+  }
+
   const afterViolations = parseViolations(optimizeResult?.violations);
   const { solved, persisting, newViolations } = multisetDiff(beforeViolations, afterViolations);
 
@@ -223,8 +244,7 @@ export function buildOptimizationDelta(
     solvedByConstraint: groupSolvedByConstraint(solved),
   };
 
-  const scheduleChanges =
-    afterMoves !== null ? computeScheduleChanges(beforeMoves, afterMoves) : null;
+  const scheduleChanges = computeScheduleChanges(beforeMoves, afterMoves);
 
   return { violationDelta, scheduleChanges, baselineAvailable: true };
 }

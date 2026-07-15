@@ -26,6 +26,8 @@ type Props = {
   onRevertSchedule: () => void;
   onLoadSiblingSchedule: () => void;
   onFork: (stateAt: number, amendments: Record<string, unknown>, precedence?: string) => void;
+  onAddEfa: () => void;
+  onAddUnit: () => void;
   selectedMoveIndex: number | null;
   onSelectMove: (index: number) => void;
   activeMoveIndices: Set<number>;
@@ -52,6 +54,8 @@ export function BuilderView({
   onRevertSchedule,
   onLoadSiblingSchedule,
   onFork,
+  onAddEfa,
+  onAddUnit,
   selectedMoveIndex,
   onSelectMove,
   activeMoveIndices,
@@ -151,6 +155,34 @@ export function BuilderView({
         )}
 
         <ScenarioParamsPanel data={scenarioData} onChange={onScenarioChange} disabled={loading} />
+
+        <div className="topology-fleet-actions">
+          <h3 id="topology-fleet-heading">Topology &amp; Fleet Actions</h3>
+          <p className="hint" id="topology-fleet-hint">
+            Add a new assembly (EFA) with default physics, or scaffold a reactor unit with core, pool,
+            edges, unit mode, and shared resource wiring. Changes stay unsaved until you save the scenario.
+          </p>
+          <div className="button-row" role="group" aria-labelledby="topology-fleet-heading">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onAddEfa}
+              disabled={loading || !scenarioData}
+              aria-describedby="topology-fleet-hint"
+            >
+              Add EFA
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onAddUnit}
+              disabled={loading || !scenarioData}
+              aria-describedby="topology-fleet-hint"
+            >
+              Add Unit
+            </button>
+          </div>
+        </div>
       </section>
 
       <section className="panel builder-section builder-section-schedule">

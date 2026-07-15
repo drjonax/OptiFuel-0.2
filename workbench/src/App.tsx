@@ -1,19 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   forkScenario,
+  getOptimizeCapabilities,
   getScenario,
   getSchedule,
   listScenarios,
   optimize,
+  postLockEffective,
   saveScenario,
   saveSchedule,
   simulate,
+  type MatrixLockCapabilities,
+  type LockEffectivePreview,
   type RunResult,
+  type StructureLockMode,
 } from "./api";
 import { ViewTabs, viewPanelId, type WorkbenchView } from "./components/ViewTabs";
 import { BuilderView } from "./components/views/BuilderView";
 import { OptimizeView, type OptimizationAlgorithm } from "./components/views/OptimizeView";
 import { SimulateView } from "./components/views/SimulateView";
+import { matrixCellKey, serializeSparseLocks } from "./lib/constraintLockMatrix";
 import {
   buildInitialLocations,
   derivePlaybackState,
@@ -33,6 +39,7 @@ import {
   parseScheduleMoves,
   type OptimizationDelta,
 } from "./lib/optimizationDiff";
+import { addEfa, addUnitScaffold } from "./lib/scenarioMutations";
 
 const DEFAULT_SCENARIO = "examples/reference_plant/scenario.yaml";
 
@@ -69,6 +76,12 @@ export default function App() {
   const [scenarios, setScenarios] = useState<string[]>([]);
   const [runtimeMode, setRuntimeMode] = useState("fail_fast");
   const [optimizationAlgorithm, setOptimizationAlgorithm] = useState<OptimizationAlgorithm>("cp_sat");
+  const [lockModeEnabled, setLockModeEnabled] = useState(false);
+  const [structureMode, setStructureMode] = useState<StructureLockMode>("locked");
+  const [matrixLocks, setMatrixLocks] = useState<Map<string, boolean>>(() => new Map());
+  const [lockCapabilities, setLockCapabilities] = useState<MatrixLockCapabilities | null>(null);
+  const [lockCapabilitiesLoading, setLockCapabilitiesLoading] = useState(false);
+  const [lockEffectivePreview, setLockEffectivePreview] = useState<LockEffectivePreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [simulateResult, setSimulateResult] = useState<RunResult | null>(null);
@@ -145,6 +158,59 @@ export default function App() {
     }
   }, []);
 
+  const lockPathsReady = !isScenarioDirty && !isScheduleDirty && Boolean(scenarioPath);
+  const lockMatrixPathsReady = Boolean(scenarioPath);
+
+  useEffect(() => {
+    if (!lockMatrixPathsReady) {
+      setLockEffectivePreview(null);
+      return;
+    }
+    let cancelled = false;
+    setLockCapabilitiesLoading(true);
+    void getOptimizeCapabilities(scenarioPath, schedulePath)
+      .then((caps) => {
+        if (!cancelled) setLockCapabilities(caps);
+      })
+      .catch(() => {
+        if (!cancelled) setLockCapabilities(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLockCapabilitiesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lockMatrixPathsReady, scenarioPath, schedulePath]);
+
+  useEffect(() => {
+    if (!lockModeEnabled || !lockPathsReady || !lockCapabilities) {
+      setLockEffectivePreview(null);
+      return;
+    }
+    const sparseLocks = serializeSparseLocks(matrixLocks, lockCapabilities);
+    const timer = window.setTimeout(() => {
+      void postLockEffective({
+        scenario_path: scenarioPath,
+        schedule_path: schedulePath,
+        lock_mode: "enforced",
+        structure_mode: structureMode,
+        constraint_param_locks: sparseLocks,
+      })
+        .then(setLockEffectivePreview)
+        .catch(() => setLockEffectivePreview(null));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [
+    lockModeEnabled,
+    lockPathsReady,
+    lockCapabilities,
+    matrixLocks,
+    scenarioPath,
+    schedulePath,
+    structureMode,
+  ]);
+
   useEffect(() => {
     void loadScenarioAndSchedule(scenarioPath);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -172,13 +238,32 @@ export default function App() {
     }));
   }, [scheduleData]);
 
+  const toggleMatrixLock = (entityId: string, constraintId: string, locked: boolean) => {
+    setMatrixLocks((prev) => {
+      const next = new Map(prev);
+      const key = matrixCellKey(entityId, constraintId);
+      if (locked) next.delete(key);
+      else next.set(key, false);
+      return next;
+    });
+  };
+
   const optimizationDelta: OptimizationDelta | null = useMemo(() => {
     if (!optimizeResult && !optimizeBaselineResult) return null;
+    let outcome: "feasible" | "infeasible_or_timeout" | null = null;
+    if (optimizeResult) {
+      if ("outcome" in optimizeResult && optimizeResult.outcome) {
+        outcome = optimizeResult.outcome as "feasible" | "infeasible_or_timeout";
+      } else if (postOptMoves !== null) {
+        outcome = "feasible";
+      }
+    }
     return buildOptimizationDelta(
       optimizeBaselineResult,
       optimizeResult,
       preOptMoves ?? [],
       postOptMoves,
+      outcome,
     );
   }, [optimizeBaselineResult, optimizeResult, preOptMoves, postOptMoves]);
 
@@ -356,7 +441,17 @@ export default function App() {
         setOptimizeBaselineResult(null);
       }
 
-      const result = await optimize(scenarioPath, schedulePath);
+      const lockOptions = lockModeEnabled
+        ? {
+            lock_mode: "enforced" as const,
+            structure_mode: structureMode,
+            constraint_param_locks: lockCapabilities
+              ? serializeSparseLocks(matrixLocks, lockCapabilities)
+              : [],
+          }
+        : undefined;
+
+      const result = await optimize(scenarioPath, schedulePath, lockOptions);
       if (result.outcome === "feasible" && result.artifacts) {
         setOptimizeResult(result.artifacts);
         if (result.schedule?.moves) {
@@ -386,6 +481,28 @@ export default function App() {
     setOptimizationAppliedToBuilder(true);
     setSelectedMoveIndex(null);
     setActiveView("builder");
+  };
+
+  const handleAddEfa = () => {
+    if (!scenarioData) return;
+    const result = addEfa(scenarioData);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setError(null);
+    setScenarioData(result.scenario);
+  };
+
+  const handleAddUnit = () => {
+    if (!scenarioData) return;
+    const result = addUnitScaffold(scenarioData);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setError(null);
+    setScenarioData(result.scenario);
   };
 
   const handleFork = async (stateAt: number, amendments: Record<string, unknown>, precedence?: string) => {
@@ -478,6 +595,8 @@ export default function App() {
               onRevertSchedule={revertSchedule}
               onLoadSiblingSchedule={() => void loadSiblingSchedule()}
               onFork={(stateAt, amendments, precedence) => void handleFork(stateAt, amendments, precedence)}
+              onAddEfa={handleAddEfa}
+              onAddUnit={handleAddUnit}
               selectedMoveIndex={selectedMoveIndex}
               onSelectMove={selectMove}
               activeMoveIndices={playback.activeMoveIndices}
@@ -531,6 +650,15 @@ export default function App() {
               schedulePath={schedulePath}
               optimizationAlgorithm={optimizationAlgorithm}
               onAlgorithmChange={setOptimizationAlgorithm}
+              lockModeEnabled={lockModeEnabled}
+              onLockModeEnabledChange={setLockModeEnabled}
+              structureMode={structureMode}
+              onStructureModeChange={setStructureMode}
+              lockCapabilities={lockCapabilities}
+              lockCapabilitiesLoading={lockCapabilitiesLoading}
+              lockEffectivePreview={lockEffectivePreview}
+              matrixLocks={matrixLocks}
+              onToggleMatrixLock={toggleMatrixLock}
               onRunOptimize={() => void runOpt()}
               optimizeResult={optimizeResult}
               optimizedMoveCount={optimizedMoveCount}

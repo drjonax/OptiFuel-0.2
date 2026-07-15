@@ -3,25 +3,28 @@ scenario: reference_plant
 moves:
 - entity: A1
   edge: fresh_to_staging
-  start: 100
+  start: 120
 - entity: A1
   edge: staging_to_core_u1
-  start: 1500
+  start: 150
 - entity: A1
   edge: core_u1_to_pool
-  start: 3000
+  start: 360
 - entity: A1
   edge: pool_u1_to_lts
-  start: 5000
+  start: 450
 - entity: A2
   edge: fresh_to_staging
-  start: 200
+  start: 30
 - entity: A2
   edge: staging_to_core_u2
-  start: 3000
+  start: 60
 - entity: A3
   edge: fresh_to_staging
-  start: 300
+  start: 0
 - entity: A3
-  edge: staging_to_core_u3
-  start: 2000
+  edge: staging_to_core_u1
+  start: 210
+- entity: A3
+  edge: core_u1_to_pool
+  start: 270

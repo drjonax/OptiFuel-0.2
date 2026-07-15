@@ -57,18 +57,6 @@ topology:
     boundary: sink
     geometry: null
     attributes: {}
-  - id: core_u4
-    type: core
-    unit: U4
-    boundary: none
-    geometry: null
-    attributes: {}
-  - id: pool_u4
-    type: interim_pool
-    unit: U4
-    boundary: none
-    geometry: null
-    attributes: {}
   edges:
   - id: fresh_to_staging
     from: fresh_store
@@ -169,36 +157,6 @@ topology:
     duration_min:
       base_min: 120
       modifiers: []
-  - id: staging_to_core_u4
-    from: corridor_staging
-    to: core_u4
-    requires:
-    - fhm_1
-    - crew_a
-    - corridor_transit
-    duration_min:
-      base_min: 60
-      modifiers: []
-  - id: core_u4_to_pool
-    from: core_u4
-    to: pool_u4
-    requires:
-    - fhm_1
-    - crew_a
-    - cask_1
-    duration_min:
-      base_min: 90
-      modifiers: []
-  - id: pool_u4_to_lts
-    from: pool_u4
-    to: lts
-    requires:
-    - fhm_1
-    - corridor_transit
-    - cask_1
-    duration_min:
-      base_min: 120
-      modifiers: []
 entities:
 - id: A1
   location: fresh_store
@@ -224,22 +182,6 @@ entities:
     discharge_time_min: null
     heat_kw: 1
   history: []
-- id: A5
-  location: fresh_store
-  position: null
-  state:
-    burnup_mwd_kgu: 0
-    discharge_time_min: null
-    heat_kw: 1
-  history: []
-- id: A6
-  location: fresh_store
-  position: null
-  state:
-    burnup_mwd_kgu: 0
-    discharge_time_min: null
-    heat_kw: 1
-  history: []
 resources:
 - id: fhm_1
   type: fhm
@@ -249,7 +191,6 @@ resources:
   - U1
   - U2
   - U3
-  - U4
   holds_entities: false
 - id: fhm_2
   type: fhm
@@ -259,7 +200,6 @@ resources:
   - U1
   - U2
   - U3
-  - U4
   holds_entities: false
 - id: corridor_transit
   type: corridor_transit
@@ -269,7 +209,6 @@ resources:
   - U1
   - U2
   - U3
-  - U4
   holds_entities: false
 - id: crew_a
   type: crew
@@ -279,7 +218,6 @@ resources:
   - U1
   - U2
   - U3
-  - U4
   holds_entities: false
 - id: crew_b
   type: crew
@@ -289,7 +227,6 @@ resources:
   - U1
   - U2
   - U3
-  - U4
   holds_entities: false
 - id: cask_1
   type: cask
@@ -299,7 +236,6 @@ resources:
   - U1
   - U2
   - U3
-  - U4
   holds_entities: false
 - id: cask_2
   type: cask
@@ -309,7 +245,6 @@ resources:
   - U1
   - U2
   - U3
-  - U4
   holds_entities: false
 unit_modes:
 - unit: U1
@@ -326,11 +261,6 @@ unit_modes:
   windows:
   - from: 4320
     to: 5760
-    mode: refueling
-- unit: U4
-  windows:
-  - from: 0
-    to: 10080
     mode: refueling
 constraints:
 - id: cap_staging
@@ -383,14 +313,6 @@ constraints:
   params:
     min_cooling_min: 100
     required_cooling_min: 120
-- id: thermal_pool_u4
-  scope: node
-  target: pool_u4
-  type: thermal
-  predicate: {}
-  hard: true
-  params:
-    max_heat_kw: 500
 physics:
   decay_models:
   - entity_id: A1
@@ -411,18 +333,6 @@ physics:
       heat_kw: 1
     - time_min: 5000
       heat_kw: 13
-  - entity_id: A5
-    table:
-    - time_min: 0
-      heat_kw: 1
-    - time_min: 5000
-      heat_kw: 12
-  - entity_id: A6
-    table:
-    - time_min: 0
-      heat_kw: 1
-    - time_min: 5000
-      heat_kw: 12
   core_exit_states:
   - entity_id: A1
     cycle: 1
@@ -436,14 +346,6 @@ physics:
     cycle: 1
     burnup_mwd_kgu: 23
     discharge_time_min: 4200
-  - entity_id: A5
-    cycle: 1
-    burnup_mwd_kgu: 22
-    discharge_time_min: 4032
-  - entity_id: A6
-    cycle: 1
-    burnup_mwd_kgu: 22
-    discharge_time_min: 4032
 arrivals:
 - entity_id: A4
   node_id: fresh_store

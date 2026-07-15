@@ -21,6 +21,8 @@ export function TimelineScrubber({
   disabled,
 }: Props) {
   const maxTime = Math.max(
+    1,
+    scrubTime,
     horizonMin,
     timeline.reduce((max, event) => Math.max(max, Number(event.t_min ?? 0)), 0),
   );

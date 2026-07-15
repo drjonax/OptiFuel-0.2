@@ -60,7 +60,152 @@ def test_optimize_endpoint() -> None:
         json={"scenario_path": SCENARIO, "seed": 42, "time_limit_sec": 2.0},
     )
     assert response.status_code == 200
-    assert response.json()["outcome"] in {"feasible", "infeasible_or_timeout"}
+    body = response.json()
+    assert body["outcome"] in {"feasible", "infeasible_or_timeout"}
+    assert body["lock_contract"]["lock_mode"] == "legacy"
+    assert body["execution_mode"] == "timing_preserve_structure"
+    assert body["resolved_seed_schedule_path"] == SCHEDULE
+
+
+def test_optimize_auto_seeds_from_sibling() -> None:
+    response = client.post(
+        "/runs/optimize",
+        json={"scenario_path": SCENARIO, "seed": 42, "time_limit_sec": 2.0},
+    )
+    assert response.status_code == 200
+    assert response.json()["resolved_seed_schedule_path"] == SCHEDULE
+
+
+def test_optimize_rejected_when_no_seed_available() -> None:
+    response = client.post(
+        "/runs/optimize",
+        json={
+            "scenario_path": SCENARIO,
+            "seed_schedule_path": "examples/reference_plant/missing_schedule.yaml",
+            "seed": 42,
+            "time_limit_sec": 2.0,
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "seed_schedule_required"
+
+
+def test_optimize_capabilities_endpoint() -> None:
+    response = client.get("/runs/optimize/capabilities")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["scenario_tunable_active"] is False
+    assert "horizon_min" in body["allowlisted_scenario_paths"]
+
+
+def test_optimize_capabilities_with_scenario_paths() -> None:
+    response = client.get(
+        "/runs/optimize/capabilities",
+        params={"scenario_path": SCENARIO, "schedule_path": SCHEDULE},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert "A4" in body["entities"]
+    assert body["global_entity_id"] == "__global__"
+    assert "temporal_horizon" in {c["id"] for c in body["constraints"]}
+
+
+def test_optimize_lock_effective_endpoint() -> None:
+    response = client.post(
+        "/runs/optimize/locks/effective",
+        json={
+            "scenario_path": SCENARIO,
+            "schedule_path": SCHEDULE,
+            "lock_mode": "enforced",
+            "structure_mode": "locked",
+            "constraint_param_locks": [
+                {"entity_id": "__global__", "constraint_id": "temporal_horizon", "locked": False},
+            ],
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["effective_constraint_locks"]["temporal_horizon"] is False
+    assert "temporal_horizon" in body["shared_unlocked_constraint_ids"]
+
+
+def test_optimize_lock_effective_invalid_pair_rejected() -> None:
+    response = client.post(
+        "/runs/optimize/locks/effective",
+        json={
+            "scenario_path": SCENARIO,
+            "schedule_path": SCHEDULE,
+            "lock_mode": "enforced",
+            "structure_mode": "locked",
+            "constraint_param_locks": [
+                {"entity_id": "__global__", "constraint_id": "not_a_constraint", "locked": False},
+            ],
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "lock_contract_invalid"
+
+
+def test_optimize_enforced_locked_roundtrip() -> None:
+    response = client.post(
+        "/runs/optimize",
+        json={
+            "scenario_path": SCENARIO,
+            "seed_schedule_path": SCHEDULE,
+            "seed": 42,
+            "time_limit_sec": 3.0,
+            "lock_mode": "enforced",
+            "structure_mode": "locked",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["lock_contract"]["active"] is True
+    assert body["lock_contract"]["structure_mode"] == "locked"
+
+
+def test_optimize_enforced_locked_without_explicit_seed_uses_sibling() -> None:
+    response = client.post(
+        "/runs/optimize",
+        json={
+            "scenario_path": SCENARIO,
+            "lock_mode": "enforced",
+            "structure_mode": "locked",
+            "seed": 42,
+            "time_limit_sec": 3.0,
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["resolved_seed_schedule_path"] == SCHEDULE
+    assert body["execution_mode"] == "timing_preserve_structure"
+
+
+def test_optimize_invalid_lock_contract_rejected() -> None:
+    response = client.post(
+        "/runs/optimize",
+        json={
+            "scenario_path": SCENARIO,
+            "lock_mode": "enforced",
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "lock_contract_invalid"
+
+
+def test_optimize_scenario_lock_warning() -> None:
+    response = client.post(
+        "/runs/optimize",
+        json={
+            "scenario_path": SCENARIO,
+            "seed_schedule_path": SCHEDULE,
+            "lock_mode": "enforced",
+            "structure_mode": "locked",
+            "scenario_locks": ["horizon_min"],
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["lock_contract"].get("warning") == "scenario_locks_not_applied"
 
 
 def test_fork_endpoint() -> None:

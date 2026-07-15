@@ -54,6 +54,21 @@ v1 MUST include:
 - full objective layer with weighted normalized terms,
 - objective parity validation where adapter score matches `Objective.score()` within declared tolerance.
 
+v1 optimizer lock contract (runtime-only, opt-in):
+- Default optimize execution is **timing-first**: auto-seeds from explicit `seed_schedule_path` or sibling `schedule.yaml`, preserves move structure, optimizes `start_min`.
+- Rejects optimize when no valid seed schedule is available (`seed_schedule_required`).
+- Response metadata includes `execution_mode: timing_preserve_structure` and `resolved_seed_schedule_path`.
+- `lock_mode`: `legacy` (default when lock payload omitted) or `enforced`.
+- When `lock_mode=enforced`, `structure_mode` MUST be `locked` or `unlocked` (timing-first still preserves move set in v1).
+- Constraint parameter locks use an EFA × constraint matrix (`constraint_param_locks`): rows are fuel entities plus arrivals and a `__global__` row; columns are scenario constraints; checked cells mean tuning is locked.
+- Sparse matrix payloads omit applicable pairs that default to locked; unlocking any applicable row (or Global) makes shared constraint parameters tunable globally.
+- Backend resolves effective locks authoritatively; `GET /runs/optimize/capabilities` and `POST /runs/optimize/locks/effective` use saved scenario/schedule paths.
+- Solver-encoded unlocks in v1 phase 2a: `temporal` bounds, `resource.max_concurrent`, and hard node `capacity.max_entities` (locked baseline in timing-first mode); `thermal` and `regulatory` unlocks emit warnings; `precedence` is locked-only.
+- Timing-first mode preserves canonical per-EFA move sequence (all seed moves mandatory; order fixed; timing-only optimization).
+- Per-move field locks (`start_min`) remain supported for structure-locked runs.
+- Scenario lock paths are allowlisted (`horizon_min` in v1) and preview-only unless backend reports active scenario tuning.
+- Lock contract status is returned in optimize responses and run artifacts (`optimizer.lock_contract`).
+
 ### 2.4 Determinism and conformance scope
 
 v1 determinism conformance is:

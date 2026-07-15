@@ -10,6 +10,7 @@ fuelflow/constraints/vocabulary.py
 fuelflow/engine/__init__.py
 fuelflow/engine/opt/__init__.py
 fuelflow/engine/opt/cpsat_adapter.py
+fuelflow/engine/opt/locks.py
 fuelflow/engine/sim/__init__.py
 fuelflow/engine/sim/simulator.py
 fuelflow/entities/__init__.py
@@ -17,6 +18,7 @@ fuelflow/entities/models.py
 fuelflow/io/__init__.py
 fuelflow/io/artifacts.py
 fuelflow/io/canonical.py
+fuelflow/io/paths.py
 fuelflow/io/yaml_io.py
 fuelflow/objectives/__init__.py
 fuelflow/objectives/scoring.py
@@ -45,4 +47,5 @@ tests/test_fairness.py
 tests/test_golden.py
 tests/test_library_api.py
 tests/test_optimizer_conformance.py
+tests/test_paths.py
 tests/test_persistence.py
