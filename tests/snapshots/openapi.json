@@ -24,57 +24,6 @@
         "title": "ConstraintParamLock",
         "type": "object"
       },
-      "ForkRequest": {
-        "properties": {
-          "amendments": {
-            "additionalProperties": true,
-            "title": "Amendments",
-            "type": "object"
-          },
-          "output_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Output Path"
-          },
-          "precedence": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Precedence"
-          },
-          "scenario_path": {
-            "title": "Scenario Path",
-            "type": "string"
-          },
-          "schedule_path": {
-            "title": "Schedule Path",
-            "type": "string"
-          },
-          "state_at_min": {
-            "title": "State At Min",
-            "type": "number"
-          }
-        },
-        "required": [
-          "scenario_path",
-          "schedule_path",
-          "state_at_min",
-          "amendments"
-        ],
-        "title": "ForkRequest",
-        "type": "object"
-      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -599,46 +548,6 @@
           }
         },
         "summary": "List Scenarios"
-      }
-    },
-    "/scenarios/fork": {
-      "post": {
-        "operationId": "fork_endpoint_scenarios_fork_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ForkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Fork Endpoint Scenarios Fork Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Fork Endpoint"
       }
     },
     "/scenarios/{scenario_id}": {

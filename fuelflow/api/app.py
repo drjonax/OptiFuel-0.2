@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
 from fuelflow.engine.opt.locks import ConstraintParamLock, MoveLock, OptimizeLockContract
+from fuelflow.engine.opt.tuning_policy import TuningPolicy
 
 from fuelflow.services import (
     ServiceError,
@@ -79,6 +80,7 @@ class OptimizeRequest(BaseModel):
     move_locks: list[MoveLock] | None = None
     scenario_locks: list[str] | None = None
     constraint_param_locks: list[ConstraintParamLock] | None = None
+    tuning_policy: TuningPolicy | None = None
 
     @field_validator("lock_mode")
     @classmethod
@@ -306,6 +308,7 @@ def optimize_endpoint(body: OptimizeRequest) -> dict[str, Any]:
             time_limit_sec=body.time_limit_sec,
             seed_schedule_path=WORKSPACE / body.seed_schedule_path if body.seed_schedule_path else None,
             lock_contract=lock_contract,
+            tuning_policy=body.tuning_policy,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -330,3 +333,5 @@ def fork_endpoint(body: ForkRequest) -> dict[str, Any]:
         )
     except Exception as exc:
         _handle_error(exc)
+
+

@@ -17,6 +17,7 @@ from fuelflow.engine.opt.locks import (
     resource_baseline_capacity,
     resolve_lock_state,
 )
+from fuelflow.engine.opt.tuning_policy import TuningResolution, allows_tuning
 from fuelflow.engine.sim.simulator import simulate
 from fuelflow.objectives.scoring import score_objective
 from fuelflow.scenario.model import Move, Scenario, Schedule
@@ -42,6 +43,7 @@ def _build_model_bounds(
     scenario: Scenario,
     model: cp_model.CpModel,
     resolution: LockResolution | None,
+    tuning_resolution: TuningResolution | None,
 ) -> tuple[int, int | cp_model.IntVar, dict[str, dict[str, int | float]], dict[str, cp_model.IntVar]]:
     """Return earliest, latest cap (int or decision var), tuned metadata, slack vars by constraint id."""
     horizon = int(scenario.horizon_min)
@@ -60,7 +62,12 @@ def _build_model_bounds(
         base_latest = int(float(constraint.params.get("latest_min", horizon)))
         earliest = max(earliest, base_earliest)
         locked = resolution.effective_constraint_locks.get(constraint.id, True) if resolution else True
-        if locked:
+        tunable_latest = allows_tuning(
+            tuning_resolution,
+            constraint_id=constraint.id,
+            param_name="latest_min",
+        )
+        if locked or not tunable_latest:
             locked_latest = min(locked_latest, base_latest)
         else:
             unlocked_present = True
@@ -105,6 +112,7 @@ def _resource_capacity_vars(
     model: cp_model.CpModel,
     scenario: Scenario,
     resolution: LockResolution | None,
+    tuning_resolution: TuningResolution | None,
     tuned: dict[str, dict[str, int | float]],
 ) -> dict[str, cp_model.IntVar | int]:
     capacities: dict[str, cp_model.IntVar | int] = {}
@@ -117,7 +125,12 @@ def _resource_capacity_vars(
         locked = True
         if constraint and resolution:
             locked = resolution.effective_constraint_locks.get(constraint.id, True)
-        if locked or constraint is None:
+        can_tune_capacity = constraint is not None and allows_tuning(
+            tuning_resolution,
+            constraint_id=constraint.id,
+            param_name="max_concurrent",
+        )
+        if locked or constraint is None or not can_tune_capacity:
             capacities[resource.id] = baseline
         else:
             upper = max(baseline + 1, baseline)
@@ -301,6 +314,7 @@ def _optimize_legacy(
     seed_schedule: Schedule | None,
     contract: OptimizeLockContract,
     resolution: LockResolution | None,
+    tuning_resolution: TuningResolution | None,
 ) -> OptimizerResult:
     """Internal-only structure-search path; not used by API-facing optimize()."""
     edges = scenario.topology.edges
@@ -309,8 +323,8 @@ def _optimize_legacy(
         return OptimizerResult(outcome="infeasible_or_timeout", reason="infeasible")
 
     model = cp_model.CpModel()
-    earliest, latest_cap, tuned, slack_by = _build_model_bounds(scenario, model, resolution)
-    resource_capacities = _resource_capacity_vars(model, scenario, resolution, tuned)
+    earliest, latest_cap, tuned, slack_by = _build_model_bounds(scenario, model, resolution, tuning_resolution)
+    resource_capacities = _resource_capacity_vars(model, scenario, resolution, tuning_resolution, tuned)
     start_vars: dict[tuple[str, str], cp_model.IntVar] = {}
     presence_vars: dict[tuple[str, str], cp_model.IntVar] = {}
     horizon = int(scenario.horizon_min)
@@ -394,6 +408,7 @@ def _optimize_structure_locked(
     time_limit_sec: float,
     contract: OptimizeLockContract,
     resolution: LockResolution | None,
+    tuning_resolution: TuningResolution | None,
 ) -> OptimizerResult:
     edges = scenario.topology.edges
     edge_map = {edge.id: edge for edge in edges}
@@ -404,8 +419,8 @@ def _optimize_structure_locked(
     canonical_sequences = canonical_entity_move_keys(seed_schedule)
 
     model = cp_model.CpModel()
-    earliest, latest_cap, tuned, slack_by = _build_model_bounds(scenario, model, resolution)
-    resource_capacities = _resource_capacity_vars(model, scenario, resolution, tuned)
+    earliest, latest_cap, tuned, slack_by = _build_model_bounds(scenario, model, resolution, tuning_resolution)
+    resource_capacities = _resource_capacity_vars(model, scenario, resolution, tuning_resolution, tuned)
     locked = locked_start_fields(contract) if contract.active else set()
     start_vars: dict[tuple[str, str, int], cp_model.IntVar] = {}
     horizon = int(scenario.horizon_min)
@@ -496,6 +511,7 @@ def optimize(
     seed_schedule: Schedule | None = None,
     lock_contract: OptimizeLockContract | None = None,
     lock_resolution: LockResolution | None = None,
+    tuning_resolution: TuningResolution | None = None,
 ) -> OptimizerResult:
     if cp_model is None:
         return OptimizerResult(outcome="infeasible_or_timeout", reason="infeasible")
@@ -515,4 +531,5 @@ def optimize(
         time_limit_sec=time_limit_sec,
         contract=contract,
         resolution=resolution,
+        tuning_resolution=tuning_resolution,
     )

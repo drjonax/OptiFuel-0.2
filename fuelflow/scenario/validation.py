@@ -38,6 +38,12 @@ def validate_scenario(scenario: Scenario) -> list[ValidationIssue]:
             if req not in resource_ids:
                 issues.append(ValidationIssue("V-03", "error", f"Edge {edge.id} requires unknown resource {req}"))
 
+    unit_ids = {
+        node.unit
+        for node in scenario.topology.nodes
+        if node.unit not in {None, "shared"}
+    } | {mode.unit for mode in scenario.unit_modes}
+
     for entity in scenario.entities:
         if entity.location not in node_ids and entity.location not in resource_ids:
             issues.append(ValidationIssue("V-03", "error", f"Entity {entity.id} at unknown location"))
@@ -45,6 +51,14 @@ def validate_scenario(scenario: Scenario) -> list[ValidationIssue]:
             resource = next(r for r in scenario.resources if r.id == entity.location)
             if not resource.holds_entities:
                 issues.append(ValidationIssue("V-11", "error", f"Entity {entity.id} on non-holding resource"))
+        if entity.home_unit is not None and entity.home_unit not in unit_ids:
+            issues.append(
+                ValidationIssue(
+                    "V-13",
+                    "error",
+                    f"Entity {entity.id} home_unit references unknown unit {entity.home_unit}",
+                ),
+            )
 
     for constraint in scenario.constraints:
         if constraint.type not in ALLOWED_CONSTRAINT_TYPES:

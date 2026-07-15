@@ -252,21 +252,20 @@ def test_lock_effective_preview_matches_optimize_run() -> None:
     assert effective["unlock_warnings"] == preview["unlock_warnings"]
 
 
-def test_entity_rows_include_arrivals() -> None:
+def test_entity_rows_match_reference_entities() -> None:
     from fuelflow.engine.opt.locks import entity_rows
 
     scenario, _ = _reference_pair()
     rows = entity_rows(scenario)
-    assert "A1" in rows
-    assert "A4" in rows
+    assert rows == ["A1", "A2"]
 
 
-def test_capabilities_matrix_includes_arrival_applicability() -> None:
+def test_capabilities_matrix_includes_reference_entities() -> None:
     from fuelflow.engine.opt.locks import GLOBAL_ENTITY_ID, lock_capabilities
 
     scenario, schedule = _reference_pair()
     caps = lock_capabilities(scenario, schedule)
-    assert "A4" in caps["entities"]
+    assert caps["entities"] == ["A1", "A2"]
     assert GLOBAL_ENTITY_ID in caps["applicability"]
 
 

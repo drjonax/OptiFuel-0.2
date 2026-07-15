@@ -1,7 +1,24 @@
 /** Pure scenario mutators for Builder topology & fleet actions. */
 
+import {
+  collectUnitIds,
+  edgeUnitFromId,
+  FRESH_TO_STAGING_EDGE,
+  listFhmResourceIds,
+  listNumericFhmIds,
+  nextFreshToStagingStart,
+  pickFhmForUnit,
+  replaceFhmInRequires,
+} from "./scenarioHelpers";
+
 export type ScenarioMutationResult =
   | { ok: true; scenario: Record<string, unknown> }
+  | { ok: false; error: string };
+
+export type ScheduleSeedMove = { entity: string; edge: string; start: number };
+
+export type AddEfaResult =
+  | { ok: true; scenario: Record<string, unknown>; scheduleSeed: ScheduleSeedMove }
   | { ok: false; error: string };
 
 type TopologyNode = {
@@ -33,6 +50,7 @@ type ResourceRecord = {
 type EntityRecord = {
   id: string;
   location: string;
+  home_unit?: string | null;
   position?: unknown;
   state: Record<string, unknown>;
   history?: unknown[];
@@ -42,12 +60,16 @@ const RESOURCE_TYPES = ["fhm", "crew", "corridor_transit", "cask"] as const;
 type ResourceType = (typeof RESOURCE_TYPES)[number];
 
 const DEFAULT_EDGE_DURATIONS = {
-  staging_to_core: 60,
+  staging_to_core: 45,
   core_to_pool: 90,
   pool_to_lts: 120,
 } as const;
 
 const DEFAULT_THERMAL_POOL_KW = 500;
+const DEFAULT_HORIZON_MIN = 1440;
+const DEFAULT_ENTITY_HEAT_KW = 1.5;
+const DEFAULT_UNIT_STAGGER_MIN = 200;
+const DEFAULT_SHORT_DISCHARGE_MIN = 1;
 
 function cloneScenario(scenario: Record<string, unknown>): Record<string, unknown> {
   return JSON.parse(JSON.stringify(scenario)) as Record<string, unknown>;
@@ -148,25 +170,6 @@ function allocateNextEntityId(scenario: Record<string, unknown>): string {
   return `A${max + 1}`;
 }
 
-function collectUnitIds(scenario: Record<string, unknown>): Set<string> {
-  const units = new Set<string>();
-  for (const node of getNodes(scenario)) {
-    if (node.unit && node.unit !== "shared") {
-      units.add(node.unit);
-    }
-  }
-  const unitModes = (scenario.unit_modes as Array<{ unit?: string }> | undefined) ?? [];
-  for (const mode of unitModes) {
-    if (mode.unit) units.add(mode.unit);
-  }
-  for (const resource of getResources(scenario)) {
-    for (const unit of resource.shared_by ?? []) {
-      units.add(unit);
-    }
-  }
-  return units;
-}
-
 function allocateNextUnitId(scenario: Record<string, unknown>): string {
   const units = collectUnitIds(scenario);
   let max = 0;
@@ -204,6 +207,35 @@ function resolveRequiredResources(
 ): { ok: true; ids: string[] } | { ok: false; error: string } {
   const ids: string[] = [];
   for (const type of types) {
+    const id = resolveResourceByType(resources, type);
+    if (!id) {
+      return {
+        ok: false,
+        error: `Missing required resource type "${type}" in scenario resources.`,
+      };
+    }
+    ids.push(id);
+  }
+  return { ok: true, ids };
+}
+
+function resolveUnitEdgeResources(
+  resources: ResourceRecord[],
+  unitId: string,
+  unitIds: string[],
+  types: ResourceType[],
+): { ok: true; ids: string[] } | { ok: false; error: string } {
+  const fhmIds = listFhmResourceIds({ resources } as Record<string, unknown>);
+  const ids: string[] = [];
+  for (const type of types) {
+    if (type === "fhm") {
+      const fhmId = pickFhmForUnit(unitId, fhmIds, unitIds);
+      if (!fhmId) {
+        return { ok: false, error: 'Missing required resource type "fhm" in scenario resources.' };
+      }
+      ids.push(fhmId);
+      continue;
+    }
     const id = resolveResourceByType(resources, type);
     if (!id) {
       return {
@@ -303,7 +335,173 @@ function getConstraints(scenario: Record<string, unknown>): Array<{
   ];
 }
 
-export function addEfa(scenario: Record<string, unknown>): ScenarioMutationResult {
+function fhmIdSet(scenario: Record<string, unknown>): Set<string> {
+  return new Set(listFhmResourceIds(scenario));
+}
+
+function hasResourceFhmConstraint(constraints: ReturnType<typeof getConstraints>): boolean {
+  return constraints.some((constraint) => constraint.id === "resource_fhm");
+}
+
+function maxNumericFhmSuffix(scenario: Record<string, unknown>): number {
+  const numeric = listNumericFhmIds(scenario);
+  let max = 0;
+  for (const id of numeric) {
+    const match = /^fhm_(\d+)$/.exec(id);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return max;
+}
+
+function makeFhmResource(id: string, sharedBy: string[]): ResourceRecord {
+  return {
+    id,
+    type: "fhm",
+    capacity: 1,
+    calendar: [],
+    shared_by: sharedBy,
+    holds_entities: false,
+  };
+}
+
+function makeFhmConstraint(resourceId: string, usePrimaryId: boolean): {
+  id: string;
+  scope: string;
+  target: string;
+  type: string;
+  predicate: Record<string, unknown>;
+  hard: boolean;
+  params: Record<string, unknown>;
+} {
+  const match = /^fhm_(\d+)$/.exec(resourceId);
+  const constraintId =
+    usePrimaryId || !match ? "resource_fhm" : `resource_fhm_${match[1]}`;
+  return {
+    id: constraintId,
+    scope: "resource",
+    target: resourceId,
+    type: "resource",
+    predicate: {},
+    hard: true,
+    params: { max_concurrent: 1 },
+  };
+}
+
+export function rewireFhmEdges(scenario: Record<string, unknown>): void {
+  const fhmIds = listFhmResourceIds(scenario);
+  if (fhmIds.length === 0) return;
+
+  const fhmSet = new Set(fhmIds);
+  const unitIds = collectUnitIds(scenario);
+  const primaryFhm = fhmIds[0];
+  const edges = getEdges(scenario);
+
+  for (const edge of edges) {
+    const usesFhm = edge.requires.some((req) => fhmSet.has(req));
+    if (!usesFhm) continue;
+
+    let targetFhm = primaryFhm;
+    if (edge.id === FRESH_TO_STAGING_EDGE) {
+      targetFhm = primaryFhm;
+    } else {
+      const edgeUnit = edgeUnitFromId(edge.id, unitIds);
+      if (edgeUnit) {
+        targetFhm = pickFhmForUnit(edgeUnit, fhmIds, unitIds);
+      }
+    }
+    edge.requires = replaceFhmInRequires(edge.requires, fhmSet, targetFhm);
+  }
+
+  setTopology(scenario, getNodes(scenario), edges);
+}
+
+export function setFhmCount(
+  scenario: Record<string, unknown>,
+  targetCount: number,
+): ScenarioMutationResult {
+  if (!Number.isInteger(targetCount) || targetCount < 1) {
+    return { ok: false, error: "fhmCount must be an integer >= 1." };
+  }
+
+  const currentCount = listFhmResourceIds(scenario).length;
+  if (currentCount === targetCount) {
+    return { ok: true, scenario: cloneScenario(scenario) };
+  }
+
+  const next = cloneScenario(scenario);
+  let resources = getResources(next);
+  let constraints = getConstraints(next);
+
+  if (targetCount > currentCount) {
+    while (listFhmResourceIds(next).length < targetCount) {
+      const sharedBy = collectUnitIds(next);
+      const nextSuffix = maxNumericFhmSuffix(next) + 1;
+      const newId = `fhm_${nextSuffix}`;
+      resources = [...getResources(next), makeFhmResource(newId, sharedBy)];
+      next.resources = resources;
+
+      const usePrimaryId = !hasResourceFhmConstraint(constraints);
+      constraints = [...getConstraints(next), makeFhmConstraint(newId, usePrimaryId)];
+      next.constraints = constraints;
+    }
+  } else {
+    while (listFhmResourceIds(next).length > targetCount) {
+      const numericIds = listNumericFhmIds(next).sort((a, b) => {
+        const na = Number(/^fhm_(\d+)$/.exec(a)?.[1] ?? 0);
+        const nb = Number(/^fhm_(\d+)$/.exec(b)?.[1] ?? 0);
+        return nb - na;
+      });
+
+      if (numericIds.length === 0) {
+        return {
+          ok: false,
+          error: `Cannot reduce fhmCount below ${listFhmResourceIds(next).length} while legacy FHM resources exist; remove manually in Code Viewer.`,
+        };
+      }
+
+      const removeId = numericIds[0];
+      const remaining = listFhmResourceIds(next).filter((id) => id !== removeId);
+      const fallbackId = remaining[0];
+      if (!fallbackId) {
+        return { ok: false, error: "Cannot remove the last FHM resource." };
+      }
+
+      const edges = getEdges(next);
+      const fhmSet = new Set([removeId]);
+      for (const edge of edges) {
+        if (edge.requires.includes(removeId)) {
+          edge.requires = replaceFhmInRequires(edge.requires, fhmSet, fallbackId);
+        }
+      }
+      setTopology(next, getNodes(next), edges);
+
+      resources = getResources(next).filter((resource) => resource.id !== removeId);
+      next.resources = resources;
+      constraints = getConstraints(next).filter((constraint) => constraint.target !== removeId);
+      next.constraints = constraints;
+    }
+  }
+
+  const sharedBy = collectUnitIds(next);
+  resources = getResources(next).map((resource) =>
+    resource.type === "fhm" ? { ...resource, shared_by: [...sharedBy] } : resource,
+  );
+  next.resources = resources;
+
+  rewireFhmEdges(next);
+  return { ok: true, scenario: next };
+}
+
+export function addEfa(
+  scenario: Record<string, unknown>,
+  homeUnit: string,
+  schedule: Record<string, unknown> | null = null,
+): AddEfaResult {
+  const unitIds = collectUnitIds(scenario);
+  if (!unitIds.includes(homeUnit)) {
+    return { ok: false, error: `Unknown home unit "${homeUnit}".` };
+  }
+
   const next = cloneScenario(scenario);
   const entityId = allocateNextEntityId(next);
   const nodes = getNodes(next);
@@ -316,11 +514,12 @@ export function addEfa(scenario: Record<string, unknown>): ScenarioMutationResul
   entities.push({
     id: entityId,
     location: sourceNode.id,
+    home_unit: homeUnit,
     position: null,
     state: {
       burnup_mwd_kgu: 0,
       discharge_time_min: null,
-      heat_kw: 1,
+      heat_kw: DEFAULT_ENTITY_HEAT_KW,
     },
     history: [],
   });
@@ -331,23 +530,33 @@ export function addEfa(scenario: Record<string, unknown>): ScenarioMutationResul
     physics.decay_models.push({
       entity_id: entityId,
       table: [
-        { time_min: 0, heat_kw: 1 },
-        { time_min: 5000, heat_kw: 12 },
+        { time_min: 0, heat_kw: DEFAULT_ENTITY_HEAT_KW },
+        { time_min: 5000, heat_kw: DEFAULT_ENTITY_HEAT_KW },
       ],
     });
   }
   if (!physics.core_exit_states.some((state) => state.entity_id === entityId)) {
-    const horizon = Number(next.horizon_min ?? 10080);
+    const horizon = Number(next.horizon_min ?? DEFAULT_HORIZON_MIN);
     physics.core_exit_states.push({
       entity_id: entityId,
       cycle: 1,
       burnup_mwd_kgu: 22,
-      discharge_time_min: Math.round(horizon * 0.4),
+      discharge_time_min: Math.min(
+        Math.round(horizon * 0.4),
+        horizon - DEFAULT_SHORT_DISCHARGE_MIN,
+      ),
     });
   }
   setPhysics(next, physics);
 
-  return { ok: true, scenario: next };
+  const start = nextFreshToStagingStart(schedule, next, homeUnit);
+  const scheduleSeed: ScheduleSeedMove = {
+    entity: entityId,
+    edge: FRESH_TO_STAGING_EDGE,
+    start,
+  };
+
+  return { ok: true, scenario: next, scheduleSeed };
 }
 
 export function addUnitScaffold(scenario: Record<string, unknown>): ScenarioMutationResult {
@@ -369,25 +578,40 @@ export function addUnitScaffold(scenario: Record<string, unknown>): ScenarioMuta
     };
   }
 
-  const stagingResources = resolveRequiredResources(resources, ["fhm", "crew", "corridor_transit"]);
-  if (!stagingResources.ok) return stagingResources;
-
-  const corePoolResources = resolveRequiredResources(resources, ["fhm", "crew", "cask"]);
-  if (!corePoolResources.ok) return corePoolResources;
-
-  const ltsNode = nodes.find((node) => node.id === "lts");
-  let ltsResources: string[] | null = null;
-  if (ltsNode) {
-    const resolved = resolveRequiredResources(resources, ["fhm", "corridor_transit", "cask"]);
-    if (!resolved.ok) return resolved;
-    ltsResources = resolved.ids;
-  }
-
   if (!hasNode(nodes, coreId)) {
     nodes.push(makeNode(coreId, "core", unitId));
   }
   if (!hasNode(nodes, poolId)) {
     nodes.push(makeNode(poolId, "interim_pool", unitId));
+  }
+
+  const unitIds = [...collectUnitIds(next), unitId].filter((v, i, a) => a.indexOf(v) === i).sort();
+
+  const stagingResources = resolveUnitEdgeResources(
+    resources,
+    unitId,
+    unitIds,
+    ["fhm", "crew", "corridor_transit"],
+  );
+  if (!stagingResources.ok) return stagingResources;
+
+  const corePoolResources = resolveUnitEdgeResources(resources, unitId, unitIds, [
+    "fhm",
+    "crew",
+    "cask",
+  ]);
+  if (!corePoolResources.ok) return corePoolResources;
+
+  const ltsNode = nodes.find((node) => node.id === "lts");
+  let ltsResources: string[] | null = null;
+  if (ltsNode) {
+    const resolved = resolveUnitEdgeResources(resources, unitId, unitIds, [
+      "fhm",
+      "corridor_transit",
+      "cask",
+    ]);
+    if (!resolved.ok) return resolved;
+    ltsResources = resolved.ids;
   }
 
   const stagingEdgeId = `staging_to_${coreId}`;
@@ -433,12 +657,15 @@ export function addUnitScaffold(scenario: Record<string, unknown>): ScenarioMuta
 
   setTopology(next, nodes, edges);
 
-  const horizon = Number(next.horizon_min ?? 10080);
+  const horizon = Number(next.horizon_min ?? DEFAULT_HORIZON_MIN);
   const unitModes = getUnitModes(next);
   if (!unitModes.some((mode) => mode.unit === unitId)) {
+    const unitMatch = /^U(\d+)$/.exec(unitId);
+    const unitNumber = unitMatch ? Number(unitMatch[1]) : 1;
+    const windowStart = unitNumber > 1 ? (unitNumber - 1) * DEFAULT_UNIT_STAGGER_MIN : 0;
     unitModes.push({
       unit: unitId,
-      windows: [{ from: 0, to: horizon, mode: "refueling" }],
+      windows: [{ from: windowStart, to: horizon, mode: "refueling" }],
     });
     next.unit_modes = unitModes;
   }
@@ -459,6 +686,10 @@ export function addUnitScaffold(scenario: Record<string, unknown>): ScenarioMuta
   }
 
   next.resources = mergeSharedBy(resources, unitId);
+
+  if (listFhmResourceIds(next).length > 1) {
+    rewireFhmEdges(next);
+  }
 
   return { ok: true, scenario: next };
 }

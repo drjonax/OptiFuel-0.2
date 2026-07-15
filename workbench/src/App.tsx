@@ -1,25 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  forkScenario,
   getOptimizeCapabilities,
   getScenario,
   getSchedule,
   listScenarios,
   optimize,
-  postLockEffective,
   saveScenario,
   saveSchedule,
   simulate,
   type MatrixLockCapabilities,
-  type LockEffectivePreview,
   type RunResult,
   type StructureLockMode,
+  type TunableParamRef,
 } from "./api";
 import { ViewTabs, viewPanelId, type WorkbenchView } from "./components/ViewTabs";
 import { BuilderView } from "./components/views/BuilderView";
 import { OptimizeView, type OptimizationAlgorithm } from "./components/views/OptimizeView";
 import { SimulateView } from "./components/views/SimulateView";
-import { matrixCellKey, serializeSparseLocks } from "./lib/constraintLockMatrix";
 import {
   buildInitialLocations,
   derivePlaybackState,
@@ -40,8 +37,11 @@ import {
   type OptimizationDelta,
 } from "./lib/optimizationDiff";
 import { addEfa, addUnitScaffold } from "./lib/scenarioMutations";
+import { collectUnitIds, defaultHomeUnitForNewEfa, edgeUnitFromId, FRESH_TO_STAGING_EDGE } from "./lib/scenarioHelpers";
 
 const DEFAULT_SCENARIO = "examples/reference_plant/scenario.yaml";
+const AUTOSAVE_DEBOUNCE_MS = 1200;
+const AUTOSAVE_STATUS_RESET_MS = 1800;
 
 const VIEW_META: Record<
   WorkbenchView,
@@ -71,6 +71,45 @@ function confirmIfDirty(isDirty: boolean, message: string): boolean {
   return window.confirm(message);
 }
 
+type TunableParamOption = {
+  key: string;
+  entityId: string;
+  constraintId: string;
+  constraintType: string;
+  paramName: string;
+};
+
+function tuningParamKey(entityId: string, constraintId: string, paramName: string): string {
+  return `${entityId}|${constraintId}|${paramName}`;
+}
+
+function buildTunableParamOptions(capabilities: MatrixLockCapabilities | null): TunableParamOption[] {
+  if (!capabilities) return [];
+  const globalId = capabilities.global_entity_id ?? "__global__";
+  const entityIds = [globalId, ...capabilities.entities];
+  const options: TunableParamOption[] = [];
+  for (const entityId of entityIds) {
+    for (const constraint of capabilities.constraints) {
+      if (!capabilities.applicability[entityId]?.[constraint.id]) continue;
+      const tunableParams = capabilities.tunable_params_by_constraint[constraint.id] ?? [];
+      for (const paramName of tunableParams) {
+        options.push({
+          key: tuningParamKey(entityId, constraint.id, paramName),
+          entityId,
+          constraintId: constraint.id,
+          constraintType: constraint.type,
+          paramName,
+        });
+      }
+    }
+  }
+  return options.sort((a, b) =>
+    a.entityId.localeCompare(b.entityId) ||
+    a.constraintId.localeCompare(b.constraintId) ||
+    a.paramName.localeCompare(b.paramName),
+  );
+}
+
 export default function App() {
   const [activeView, setActiveView] = useState<WorkbenchView>("builder");
   const [scenarioPath, setScenarioPath] = useState(DEFAULT_SCENARIO);
@@ -85,14 +124,14 @@ export default function App() {
   const [scenarios, setScenarios] = useState<string[]>([]);
   const [runtimeMode, setRuntimeMode] = useState("fail_fast");
   const [optimizationAlgorithm, setOptimizationAlgorithm] = useState<OptimizationAlgorithm>("cp_sat");
-  const [lockModeEnabled, setLockModeEnabled] = useState(false);
   const [structureMode, setStructureMode] = useState<StructureLockMode>("locked");
-  const [matrixLocks, setMatrixLocks] = useState<Map<string, boolean>>(() => new Map());
+  const [tuningPolicyEnabled, setTuningPolicyEnabled] = useState(false);
+  const [tunableParamAllowlist, setTunableParamAllowlist] = useState<Set<string>>(() => new Set());
   const [lockCapabilities, setLockCapabilities] = useState<MatrixLockCapabilities | null>(null);
   const [lockCapabilitiesLoading, setLockCapabilitiesLoading] = useState(false);
-  const [lockEffectivePreview, setLockEffectivePreview] = useState<LockEffectivePreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "pending" | "saving" | "saved" | "error">("idle");
   const [simulateResult, setSimulateResult] = useState<RunResult | null>(null);
   const [optimizeResult, setOptimizeResult] = useState<RunResult | null>(null);
   const [optimizeBaselineResult, setOptimizeBaselineResult] = useState<RunResult | null>(null);
@@ -107,6 +146,10 @@ export default function App() {
   const [scrubTime, setScrubTime] = useState(0);
   const [selectedMoveIndex, setSelectedMoveIndex] = useState<number | null>(null);
   const [selectedEventIndex, setSelectedEventIndex] = useState<number | null>(null);
+  const [addEfaHomeUnit, setAddEfaHomeUnit] = useState("");
+  const scenarioSaveInFlightRef = useRef(false);
+  const scheduleSaveInFlightRef = useRef(false);
+  const autosaveStatusTimerRef = useRef<number | null>(null);
 
   const isScenarioDirty = useMemo(
     () => scenarioData !== null && snapshotData(scenarioData) !== savedScenarioSnapshot,
@@ -167,12 +210,11 @@ export default function App() {
     }
   }, []);
 
-  const lockPathsReady = !isScenarioDirty && !isScheduleDirty && Boolean(scenarioPath);
   const lockMatrixPathsReady = Boolean(scenarioPath);
+  const tunableParamOptions = useMemo(() => buildTunableParamOptions(lockCapabilities), [lockCapabilities]);
 
   useEffect(() => {
     if (!lockMatrixPathsReady) {
-      setLockEffectivePreview(null);
       return;
     }
     let cancelled = false;
@@ -193,32 +235,13 @@ export default function App() {
   }, [lockMatrixPathsReady, scenarioPath, schedulePath]);
 
   useEffect(() => {
-    if (!lockModeEnabled || !lockPathsReady || !lockCapabilities) {
-      setLockEffectivePreview(null);
-      return;
-    }
-    const sparseLocks = serializeSparseLocks(matrixLocks, lockCapabilities);
-    const timer = window.setTimeout(() => {
-      void postLockEffective({
-        scenario_path: scenarioPath,
-        schedule_path: schedulePath,
-        lock_mode: "enforced",
-        structure_mode: structureMode,
-        constraint_param_locks: sparseLocks,
-      })
-        .then(setLockEffectivePreview)
-        .catch(() => setLockEffectivePreview(null));
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [
-    lockModeEnabled,
-    lockPathsReady,
-    lockCapabilities,
-    matrixLocks,
-    scenarioPath,
-    schedulePath,
-    structureMode,
-  ]);
+    setTunableParamAllowlist((prev) => {
+      if (prev.size === 0) return prev;
+      const validKeys = new Set(tunableParamOptions.map((option) => option.key));
+      const next = new Set(Array.from(prev).filter((key) => validKeys.has(key)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [tunableParamOptions]);
 
   useEffect(() => {
     void loadScenarioAndSchedule(scenarioPath);
@@ -236,6 +259,40 @@ export default function App() {
 
   const entityOptions = useMemo(() => extractEntityIds(scenarioData), [scenarioData]);
   const edgeOptions = useMemo(() => extractEdgeIds(scenarioData), [scenarioData]);
+  const unitIds = useMemo(() => collectUnitIds(scenarioData ?? {}), [scenarioData]);
+
+  const entityHomeUnits = useMemo(() => {
+    const map: Record<string, string | null | undefined> = {};
+    for (const entity of (scenarioData?.entities as Array<{ id?: string; home_unit?: string | null }>) ?? []) {
+      if (entity.id) map[entity.id] = entity.home_unit;
+    }
+    return map;
+  }, [scenarioData]);
+
+  const edgesForEntity = useCallback(
+    (entityId: string): string[] => {
+      if (!scenarioData) return edgeOptions;
+      const homeUnit = entityHomeUnits[entityId];
+      if (!homeUnit) return edgeOptions;
+      return edgeOptions.filter((edgeId) => {
+        if (edgeId === FRESH_TO_STAGING_EDGE) return true;
+        const edgeUnit = edgeUnitFromId(edgeId, unitIds);
+        return edgeUnit === null || edgeUnit === homeUnit;
+      });
+    },
+    [scenarioData, edgeOptions, entityHomeUnits, unitIds],
+  );
+
+  useEffect(() => {
+    if (!scenarioData) {
+      setAddEfaHomeUnit("");
+      return;
+    }
+    const defaultUnit = defaultHomeUnitForNewEfa(scenarioData);
+    setAddEfaHomeUnit((current) =>
+      current && unitIds.includes(current) ? current : (defaultUnit ?? unitIds[0] ?? ""),
+    );
+  }, [scenarioData, unitIds]);
 
   const scheduleMoves: ScheduleMove[] = useMemo(() => {
     const raw = (scheduleData?.moves as Array<{ entity?: string; edge?: string; start?: number }>) ?? [];
@@ -247,14 +304,26 @@ export default function App() {
     }));
   }, [scheduleData]);
 
-  const toggleMatrixLock = (entityId: string, constraintId: string, locked: boolean) => {
-    setMatrixLocks((prev) => {
-      const next = new Map(prev);
-      const key = matrixCellKey(entityId, constraintId);
-      if (locked) next.delete(key);
-      else next.set(key, false);
+  const handleTuningPolicyEnabledChange = (enabled: boolean) => {
+    setTuningPolicyEnabled(enabled);
+  };
+
+  const toggleTunableParam = (entityId: string, constraintId: string, paramName: string, allowed: boolean) => {
+    const key = tuningParamKey(entityId, constraintId, paramName);
+    setTunableParamAllowlist((prev) => {
+      const next = new Set(prev);
+      if (allowed) next.add(key);
+      else next.delete(key);
       return next;
     });
+  };
+
+  const selectAllTunableParams = () => {
+    setTunableParamAllowlist(new Set(tunableParamOptions.map((option) => option.key)));
+  };
+
+  const clearAllTunableParams = () => {
+    setTunableParamAllowlist(new Set());
   };
 
   const optimizationDelta: OptimizationDelta | null = useMemo(() => {
@@ -331,35 +400,86 @@ export default function App() {
     void loadScenarioAndSchedule(path, true);
   };
 
-  const saveScenarioData = async () => {
+  const clearAutosaveStatusTimer = useCallback(() => {
+    if (autosaveStatusTimerRef.current !== null) {
+      window.clearTimeout(autosaveStatusTimerRef.current);
+      autosaveStatusTimerRef.current = null;
+    }
+  }, []);
+
+  const setAutosaveState = useCallback(
+    (next: "idle" | "pending" | "saving" | "saved" | "error") => {
+      clearAutosaveStatusTimer();
+      setAutosaveStatus(next);
+      if (next === "saved") {
+        autosaveStatusTimerRef.current = window.setTimeout(() => {
+          setAutosaveStatus("idle");
+          autosaveStatusTimerRef.current = null;
+        }, AUTOSAVE_STATUS_RESET_MS);
+      }
+    },
+    [clearAutosaveStatusTimer],
+  );
+
+  const saveScenarioData = useCallback(async (options?: { silent?: boolean }) => {
     if (!scenarioData) return;
-    setLoading(true);
+    if (scenarioSaveInFlightRef.current) return;
+    scenarioSaveInFlightRef.current = true;
+    if (options?.silent) {
+      setAutosaveState("saving");
+    } else {
+      setLoading(true);
+    }
     setError(null);
     try {
       const saved = await saveScenario(scenarioPath, scenarioData, scenarioEtag);
       setScenarioEtag(saved.etag);
       setSavedScenarioSnapshot(snapshotData(scenarioData));
+      if (options?.silent) {
+        setAutosaveState("saved");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save scenario");
+      if (options?.silent) {
+        setAutosaveState("error");
+      }
     } finally {
-      setLoading(false);
+      scenarioSaveInFlightRef.current = false;
+      if (!options?.silent) {
+        setLoading(false);
+      }
     }
-  };
+  }, [scenarioData, scenarioEtag, scenarioPath, setAutosaveState]);
 
-  const saveScheduleData = async () => {
+  const saveScheduleData = useCallback(async (options?: { silent?: boolean }) => {
     if (!scheduleData) return;
-    setLoading(true);
+    if (scheduleSaveInFlightRef.current) return;
+    scheduleSaveInFlightRef.current = true;
+    if (options?.silent) {
+      setAutosaveState("saving");
+    } else {
+      setLoading(true);
+    }
     setError(null);
     try {
       const saved = await saveSchedule(schedulePath, scheduleData, scheduleEtag);
       setScheduleEtag(saved.etag);
       setSavedScheduleSnapshot(snapshotData(scheduleData));
+      if (options?.silent) {
+        setAutosaveState("saved");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save schedule");
+      if (options?.silent) {
+        setAutosaveState("error");
+      }
     } finally {
-      setLoading(false);
+      scheduleSaveInFlightRef.current = false;
+      if (!options?.silent) {
+        setLoading(false);
+      }
     }
-  };
+  }, [scheduleData, scheduleEtag, schedulePath, setAutosaveState]);
 
   const handleSaveAsScenario = async (path: string) => {
     if (!scenarioData) return;
@@ -450,17 +570,24 @@ export default function App() {
         setOptimizeBaselineResult(null);
       }
 
-      const lockOptions = lockModeEnabled
+      const lockOptions = {
+        lock_mode: "enforced" as const,
+        structure_mode: structureMode,
+      };
+
+      const tuningPolicy = tuningPolicyEnabled
         ? {
-            lock_mode: "enforced" as const,
-            structure_mode: structureMode,
-            constraint_param_locks: lockCapabilities
-              ? serializeSparseLocks(matrixLocks, lockCapabilities)
-              : [],
+            allow_tunable_params: tunableParamOptions
+              .filter((option) => tunableParamAllowlist.has(option.key))
+              .map<TunableParamRef>((option) => ({
+                entity_id: option.entityId,
+                constraint_id: option.constraintId,
+                param_name: option.paramName,
+              })),
           }
         : undefined;
 
-      const result = await optimize(scenarioPath, schedulePath, lockOptions);
+      const result = await optimize(scenarioPath, schedulePath, lockOptions, tuningPolicy);
       if (result.outcome === "feasible" && result.artifacts) {
         setOptimizeResult(result.artifacts);
         if (result.schedule?.moves) {
@@ -492,15 +619,75 @@ export default function App() {
     setActiveView("builder");
   };
 
-  const handleAddEfa = () => {
+  const handleMutationError = (message: string) => {
+    setError(message ? message : null);
+  };
+
+  useEffect(() => {
+    return () => clearAutosaveStatusTimer();
+  }, [clearAutosaveStatusTimer]);
+
+  useEffect(() => {
+    if (!scenarioData && !scheduleData) {
+      setAutosaveState("idle");
+      return;
+    }
+    if (loading) return;
+    if (!isScenarioDirty && !isScheduleDirty) {
+      if (autosaveStatus !== "error") {
+        setAutosaveState("idle");
+      }
+      return;
+    }
+
+    if (autosaveStatus !== "saving") {
+      setAutosaveState("pending");
+    }
+    const timerId = window.setTimeout(() => {
+      if (isScenarioDirty) {
+        void saveScenarioData({ silent: true });
+      }
+      if (isScheduleDirty) {
+        void saveScheduleData({ silent: true });
+      }
+    }, AUTOSAVE_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [
+    autosaveStatus,
+    isScenarioDirty,
+    isScheduleDirty,
+    loading,
+    saveScenarioData,
+    saveScheduleData,
+    scenarioData,
+    scheduleData,
+    setAutosaveState,
+  ]);
+
+  const handleAddEfa = (homeUnit: string) => {
     if (!scenarioData) return;
-    const result = addEfa(scenarioData);
+    const result = addEfa(scenarioData, homeUnit, scheduleData);
     if (!result.ok) {
       setError(result.error);
       return;
     }
     setError(null);
     setScenarioData(result.scenario);
+
+    if (scheduleData) {
+      const moves = [...((scheduleData.moves as Array<Record<string, unknown>>) ?? []), result.scheduleSeed];
+      setScheduleData({ ...scheduleData, moves });
+    } else {
+      setScheduleData({
+        schema_version: 4,
+        scenario: String(scenarioData.id ?? "scenario"),
+        moves: [result.scheduleSeed],
+      });
+      setSiblingScheduleLoaded(true);
+    }
   };
 
   const handleAddUnit = () => {
@@ -512,33 +699,6 @@ export default function App() {
     }
     setError(null);
     setScenarioData(result.scenario);
-  };
-
-  const handleFork = async (stateAt: number, amendments: Record<string, unknown>, precedence?: string) => {
-    if (
-      !confirmIfDirty(
-        isDirty,
-        "You have unsaved changes. Fork scenario anyway?",
-      )
-    ) {
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const forked = await forkScenario({
-        scenario_path: scenarioPath,
-        schedule_path: schedulePath,
-        state_at_min: stateAt,
-        amendments,
-        precedence,
-      });
-      await loadScenarioAndSchedule(forked.path, true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Fork failed");
-    } finally {
-      setLoading(false);
-    }
   };
 
   return (
@@ -554,6 +714,10 @@ export default function App() {
               <span className="badge">v1-alpha</span>
               {isScenarioDirty && <span className="badge badge-dirty">Scenario unsaved</span>}
               {isScheduleDirty && <span className="badge badge-dirty">Schedule unsaved</span>}
+              {autosaveStatus === "pending" && <span className="badge">Autosave pending</span>}
+              {autosaveStatus === "saving" && <span className="badge">Autosaving...</span>}
+              {autosaveStatus === "saved" && <span className="badge">Autosaved</span>}
+              {autosaveStatus === "error" && <span className="badge badge-dirty">Autosave failed</span>}
             </div>
             <ViewTabs activeView={activeView} onChange={handleViewChange} disabled={loading} />
           </div>
@@ -599,21 +763,26 @@ export default function App() {
               scheduleMismatch={scheduleMismatch}
               entityOptions={entityOptions}
               edgeOptions={edgeOptions}
+              edgesForEntity={edgesForEntity}
+              entityHomeUnits={entityHomeUnits}
+              unitIds={unitIds}
               isScenarioDirty={isScenarioDirty}
               isScheduleDirty={isScheduleDirty}
               loading={loading}
               onScenarioChange={setScenarioData}
               onScheduleChange={setScheduleData}
               onScenarioPathChange={handleScenarioPathChange}
-              onSaveScenario={() => void saveScenarioData()}
-              onSaveSchedule={() => void saveScheduleData()}
+              onSaveScenario={() => void saveScenarioData({ silent: false })}
+              onSaveSchedule={() => void saveScheduleData({ silent: false })}
               onSaveAsScenario={(path) => void handleSaveAsScenario(path)}
               onRevertScenario={revertScenario}
               onRevertSchedule={revertSchedule}
               onLoadSiblingSchedule={() => void loadSiblingSchedule()}
-              onFork={(stateAt, amendments, precedence) => void handleFork(stateAt, amendments, precedence)}
               onAddEfa={handleAddEfa}
               onAddUnit={handleAddUnit}
+              addEfaHomeUnit={addEfaHomeUnit}
+              onAddEfaHomeUnitChange={setAddEfaHomeUnit}
+              onMutationError={handleMutationError}
               selectedMoveIndex={selectedMoveIndex}
               onSelectMove={selectMove}
               activeMoveIndices={playback.activeMoveIndices}
@@ -667,15 +836,17 @@ export default function App() {
               schedulePath={schedulePath}
               optimizationAlgorithm={optimizationAlgorithm}
               onAlgorithmChange={setOptimizationAlgorithm}
-              lockModeEnabled={lockModeEnabled}
-              onLockModeEnabledChange={setLockModeEnabled}
               structureMode={structureMode}
               onStructureModeChange={setStructureMode}
               lockCapabilities={lockCapabilities}
               lockCapabilitiesLoading={lockCapabilitiesLoading}
-              lockEffectivePreview={lockEffectivePreview}
-              matrixLocks={matrixLocks}
-              onToggleMatrixLock={toggleMatrixLock}
+              tuningPolicyEnabled={tuningPolicyEnabled}
+              onTuningPolicyEnabledChange={handleTuningPolicyEnabledChange}
+              tunableParamOptions={tunableParamOptions}
+              tunableParamAllowlist={tunableParamAllowlist}
+              onToggleTunableParam={toggleTunableParam}
+              onSelectAllTunableParams={selectAllTunableParams}
+              onClearAllTunableParams={clearAllTunableParams}
               onRunOptimize={() => void runOpt()}
               optimizeResult={optimizeResult}
               optimizedMoveCount={optimizedMoveCount}

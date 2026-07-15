@@ -295,6 +295,14 @@ constraints:
   hard: true
   params:
     max_concurrent: 1
+- id: resource_fhm_2
+  scope: resource
+  target: fhm_2
+  type: resource
+  predicate: {}
+  hard: true
+  params:
+    max_concurrent: 1
 - id: temporal_horizon
   scope: global
   target: reference_plant

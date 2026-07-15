@@ -11,7 +11,10 @@ fuelflow/engine/__init__.py
 fuelflow/engine/opt/__init__.py
 fuelflow/engine/opt/cpsat_adapter.py
 fuelflow/engine/opt/locks.py
+fuelflow/engine/opt/tuning_policy.py
 fuelflow/engine/sim/__init__.py
+fuelflow/engine/sim/calendar_intervals.py
+fuelflow/engine/sim/feasibility.py
 fuelflow/engine/sim/simulator.py
 fuelflow/entities/__init__.py
 fuelflow/entities/models.py
@@ -21,6 +24,7 @@ fuelflow/io/canonical.py
 fuelflow/io/paths.py
 fuelflow/io/yaml_io.py
 fuelflow/objectives/__init__.py
+fuelflow/objectives/metrics.py
 fuelflow/objectives/scoring.py
 fuelflow/physics/__init__.py
 fuelflow/physics/decay.py
@@ -44,8 +48,12 @@ tests/test_contract_freeze.py
 tests/test_decay.py
 tests/test_determinism.py
 tests/test_fairness.py
+tests/test_feasibility_calendars.py
 tests/test_golden.py
+tests/test_import_boundaries.py
 tests/test_library_api.py
+tests/test_optimiser_baseline.py
 tests/test_optimizer_conformance.py
 tests/test_paths.py
 tests/test_persistence.py
+tests/test_tuning_policy.py

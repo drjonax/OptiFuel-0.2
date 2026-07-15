@@ -4,13 +4,13 @@
 
 OptiFuel is implemented as a local-first planning system with a Python backend and a React workbench. The backend exposes both a CLI and a FastAPI HTTP interface over the same service layer, so simulation and optimization behavior is shared regardless of entrypoint (`fuelflow/cli.py`, `fuelflow/api/app.py`, `fuelflow/services.py`).
 
-At runtime, users edit scenario and schedule data in the workbench, trigger simulation or optimization, inspect feasibility/objective/violations, and optionally fork scenarios for replanning. Inputs and outputs are filesystem-based YAML/JSON artifacts under a workspace root, with deterministic digesting and atomic write safeguards (`fuelflow/io/yaml_io.py`, `fuelflow/io/canonical.py`, `fuelflow/io/artifacts.py`, `workbench/src/App.tsx`).
+At runtime, users edit scenario and schedule data in the workbench, tune optimizer-aligned global parameters and starting conditions, trigger simulation or optimization, and inspect feasibility/objective/violations. Inputs and outputs are filesystem-based YAML/JSON artifacts under a workspace root, with deterministic digesting and atomic write safeguards (`fuelflow/io/yaml_io.py`, `fuelflow/io/canonical.py`, `fuelflow/io/artifacts.py`, `workbench/src/App.tsx`).
 
 The most important architectural characteristics visible in code are:
 - a layered backend (API/CLI adapters -> services -> kernel/domain -> IO),
 - deterministic simulation/optimization emphasis (ordered processing + deterministic solver settings),
 - explicit lock-contract machinery around optimization,
-- a UI orchestrator that keeps local draft state and blocks risky operations until saved.
+- a baseline-first builder UI that maps optimizer presets into schema-native edits while keeping local draft state and save guards.
 
 The biggest practical risks are architectural complexity in optimization lock semantics and the gap between UI algorithm selectors and backend optimizer selection behavior (`workbench/src/components/views/OptimizeView.tsx`, `fuelflow/services.py`, `fuelflow/engine/opt/locks.py`).
 
@@ -34,11 +34,10 @@ The implemented system has two continuously running local processes:
 
 From a user journey perspective, the core loop is:
 1. Load scenario/schedule files.
-2. Edit scenario parameters and schedule moves.
+2. Edit optimizer-mapped global parameters, starting conditions, and schedule moves.
 3. Run simulation to validate feasibility and inspect timeline effects.
 4. Run optimization to retime schedule under lock settings.
 5. Optionally apply optimized schedule back to builder state.
-6. Optionally fork scenario from a selected simulation boundary.
 
 This loop is visible in `workbench/src/App.tsx` and backed by API methods in `workbench/src/api.ts`.
 
@@ -46,11 +45,43 @@ This loop is visible in `workbench/src/App.tsx` and backed by API methods in `wo
 
 This section describes the architecture as a layered stack and explains each layer's responsibility and boundary.
 
+### Layered architecture diagram
+
+```mermaid
+flowchart TB
+  user[Planner / Engineer]
+  wb[Layer A: Workbench UI<br/>`workbench/src/App.tsx` + views]
+  api[Layer B: HTTP API adapter<br/>`fuelflow/api/app.py`]
+  cli[Layer B: CLI adapter<br/>`fuelflow/cli.py`]
+  svc[Layer C: Application services<br/>`fuelflow/services.py`]
+  kernel[Layer D: Domain + computation kernel<br/>simulation, optimization, constraints, scoring]
+  io[Layer E: IO + determinism infrastructure<br/>YAML IO, canonical digest, artifacts, paths]
+  ws[(Workspace files<br/>scenario/schedule YAML<br/>artifacts JSON)]
+
+  user --> wb
+  wb --> api
+  user --> cli
+  api --> svc
+  cli --> svc
+  svc --> kernel
+  svc --> io
+  io --> ws
+  svc --> ws
+  kernel --> svc
+  ws --> wb
+
+  note1{{No HTTP `/scenarios/fork` endpoint}}
+  note2{{Fork semantics remain in kernel + CLI}}
+  api -.-> note1
+  kernel -.-> note2
+  cli -.-> note2
+```
+
 ### 2.1 Layer A - Presentation Layer (Workbench UI)
 
 **What it does**
 - Owns transient editing state, selection state, and view composition.
-- Orchestrates user actions (simulate, optimize, fork, save).
+- Orchestrates user actions (simulate, optimize, save, apply optimized schedule).
 - Presents model-aware controls (lock matrix, timeline scrubber, Gantt/topology linking).
 
 **Key modules**
@@ -69,6 +100,7 @@ This section describes the architecture as a layered stack and explains each lay
 - Translates external input into service calls.
 - Validates request envelopes and returns normalized errors.
 - Enforces runtime interface contracts (endpoint parameters, command options).
+- Exposes simulation/optimization/saving endpoints but no HTTP scenario-fork endpoint in current refactor.
 
 **Key modules**
 - HTTP: `fuelflow/api/app.py`
@@ -101,14 +133,14 @@ This section describes the architecture as a layered stack and explains each lay
 - Defines domain model and invariants.
 - Executes simulation and optimization.
 - Implements constraints and objective scoring.
-- Implements scenario forking semantics.
+- Retains scenario forking semantics for non-HTTP surfaces (CLI/library).
 
 **Key modules**
 - models: `fuelflow/scenario/model.py`, `fuelflow/topology/models.py`, `fuelflow/entities/models.py`, `fuelflow/resources/models.py`, `fuelflow/physics/decay.py`
 - simulation: `fuelflow/engine/sim/simulator.py`
 - optimization: `fuelflow/engine/opt/cpsat_adapter.py`, `fuelflow/engine/opt/locks.py`
 - constraints and scoring: `fuelflow/constraints/vocabulary.py`, `fuelflow/objectives/scoring.py`
-- fork semantics: `fuelflow/scenario/fork.py`
+- optional fork semantics: `fuelflow/scenario/fork.py`
 
 **Boundary**
 - Kernel computes in-memory structures and returns structured outputs.
@@ -136,8 +168,10 @@ This section describes the architecture as a layered stack and explains each lay
 From implementation behavior, current scope includes:
 - local single-user operation with loopback defaults (`scripts/start.sh`, `fuelflow/cli.py`, `fuelflow/api/app.py`)
 - scenario/schedule file editing with etag/digest guarded saves (`fuelflow/api/app.py`, `fuelflow/services.py`, `fuelflow/io/yaml_io.py`)
+- optimizer-baseline-aligned builder controls for global parameters and starting conditions (`workbench/src/components/GlobalParametersPanel.tsx`, `workbench/src/components/StartingConditionsPanel.tsx`, `workbench/src/lib/scenarioBaseline.ts`)
 - simulation and optimization run execution with artifact emission (`fuelflow/services.py`, `fuelflow/io/artifacts.py`)
-- fork-based replanning (`fuelflow/scenario/fork.py`)
+- a reduced two-unit `reference_plant` baseline fixture aligned with optimizer event-clock presets and enforced by dedicated regression tests (`examples/reference_plant/scenario.yaml`, `examples/reference_plant/schedule.yaml`, `tests/test_optimiser_baseline.py`, `docs/optimiser-baseline-mapping.md`)
+- CLI-level fork-based replanning (`fuelflow/cli.py`, `fuelflow/scenario/fork.py`)
 
 Not present in current code:
 - hosted auth/tenancy surface,
@@ -166,8 +200,10 @@ Not present in current code:
 
 - app orchestrator + data loading/saving (`workbench/src/App.tsx`),
 - API client (`workbench/src/api.ts`),
+- baseline mapping helpers (`workbench/src/lib/scenarioBaseline.ts`),
+- builder side panels (`workbench/src/components/GlobalParametersPanel.tsx`, `workbench/src/components/StartingConditionsPanel.tsx`),
 - views:
-  - builder (edit/save/fork tools),
+  - builder (edit/save/as, baseline controls, topology/fleet scaffold tools),
   - simulate (run + inspect timeline),
   - optimize (run + lock matrix + delta + apply to builder).
 
@@ -185,7 +221,11 @@ Constraint type set is closed (`capacity`, `thermal`, `temporal`, `resource`, `p
 
 ### 5.3 Fork semantics
 
-Forking replays simulation timeline, enforces legal boundary times, validates amendment consistency, updates lineage metadata, and validates resulting scenario (`fuelflow/scenario/fork.py`).
+Forking logic still exists in the domain layer and CLI command surface; it replays simulation timeline, enforces legal boundary times, validates amendment consistency, updates lineage metadata, and validates resulting scenario (`fuelflow/scenario/fork.py`, `fuelflow/cli.py`). The HTTP API endpoint `/scenarios/fork` and corresponding workbench panel were removed in the latest refactor (`fuelflow/api/app.py`, `workbench/src/api.ts`, `workbench/src/components/views/BuilderView.tsx`).
+
+### 5.4 Optimiser baseline mapping semantics
+
+The builder now derives editable rows from scenario/schedule structures to represent optimizer baseline concepts (global timing/capacity/thermal parameters and per-unit/per-EFA starting conditions). Edits are projected back into canonical v1 schema fields (topology edge durations, constraints, unit windows, entity heat, schedule starts), preserving schema authority while providing optimizer-native UX labels (`workbench/src/lib/scenarioBaseline.ts`, `workbench/src/components/GlobalParametersPanel.tsx`, `workbench/src/components/StartingConditionsPanel.tsx`).
 
 ## 6) Data Flow
 
@@ -226,7 +266,7 @@ The simulator constructs event times from arrivals/departures/move bounds, execu
 
 Admission checks reject move starts when resource calendars block the full move interval, shared resource capacity is exceeded, the same EFA is already active, location continuity fails, or unit refueling mode forbids the move. Multiple concurrent moves in the same unit remain allowed when they do not contend on shared resources/constraints.
 
-Simulation responses now include additive feasibility metadata (`outcome`, `reason`, `infeasible_category`) mapped from hard violations with deterministic category precedence (`fuelflow/engine/sim/feasibility.py`, `fuelflow/services.py`).
+Simulation responses include additive feasibility metadata (`outcome`, `reason`, `infeasible_category`) mapped from hard violations with deterministic category precedence (`fuelflow/engine/sim/feasibility.py`, `fuelflow/services.py`).
 
 ### 7.2 Optimization control pattern
 
@@ -274,7 +314,7 @@ Feasible solutions are replayed through simulation and rescored. Service layer p
 ## 9) Workbench Architecture Explained
 
 The workbench is not only a viewer; it is a stateful orchestration client:
-- **Builder**: model editing, save/revert/save-as, scaffolding actions, fork UI.
+- **Builder**: model editing, save/revert/save-as, scaffold actions, optimizer-baseline controls.
 - **Simulate**: runtime mode selection and linked visual analysis.
 - **Optimize**: lock controls and optimization application workflow.
 
@@ -313,6 +353,7 @@ The tests function as an executable architecture contract:
 - fairness/contention handling (`tests/test_fairness.py`)
 - persistence and adversarial IO checks (`tests/test_persistence.py`)
 - OpenAPI path freeze (`tests/test_contract_freeze.py`)
+- optimizer baseline fixture invariants and run smoke checks (`tests/test_optimiser_baseline.py`)
 
 This gives strong confidence that architectural invariants are intentionally enforced.
 
@@ -382,7 +423,10 @@ Sources: `scripts/start.sh`, `fuelflow/services.py`, `fuelflow/io/paths.py`.
 - `workbench/src/components/views/BuilderView.tsx`
 - `workbench/src/components/views/SimulateView.tsx`
 - `workbench/src/components/views/OptimizeView.tsx`
+- `workbench/src/components/GlobalParametersPanel.tsx`
+- `workbench/src/components/StartingConditionsPanel.tsx`
 - `workbench/src/components/ResultsInspector.tsx`
+- `workbench/src/lib/scenarioBaseline.ts`
 
 ### Tests
 - `tests/test_api.py`
@@ -390,6 +434,7 @@ Sources: `scripts/start.sh`, `fuelflow/services.py`, `fuelflow/io/paths.py`.
 - `tests/test_contract_freeze.py`
 - `tests/test_conformance.py`
 - `tests/test_optimizer_conformance.py`
+- `tests/test_optimiser_baseline.py`
 - `tests/test_determinism.py`
 - `tests/test_fairness.py`
 - `tests/test_persistence.py`

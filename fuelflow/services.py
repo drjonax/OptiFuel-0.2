@@ -14,6 +14,7 @@ from fuelflow.engine.opt.locks import (
     structure_signature,
     validate_constraint_param_locks,
 )
+from fuelflow.engine.opt.tuning_policy import TuningPolicy, TuningResolution, resolve_tuning_policy
 from fuelflow.io.paths import resolve_seed_schedule_path
 from fuelflow.engine.sim.simulator import simulate
 from fuelflow.engine.sim.feasibility import map_simulation_outcome
@@ -114,6 +115,7 @@ def run_optimization(
     time_limit_sec: float = 5.0,
     seed_schedule_path: Path | None = None,
     lock_contract: OptimizeLockContract | None = None,
+    tuning_policy: TuningPolicy | None = None,
 ) -> dict[str, Any]:
     global _active_runs
     with _run_lock:
@@ -155,6 +157,10 @@ def run_optimization(
 
         validate_constraint_param_locks(contract, scenario, seed_schedule)
         lock_resolution = resolve_lock_state(contract, scenario, seed_schedule)
+        try:
+            tuning_resolution = resolve_tuning_policy(tuning_policy, scenario, seed_schedule)
+        except ValueError as exc:
+            raise ServiceError("tuning_policy_invalid", str(exc)) from exc
 
         scenario_lock_warning: str | None = None
         if contract.active and contract.scenario_locks and not lock_capabilities()["scenario_tunable_active"]:
@@ -167,6 +173,7 @@ def run_optimization(
             seed_schedule=seed_schedule,
             lock_contract=contract,
             lock_resolution=lock_resolution,
+            tuning_resolution=tuning_resolution,
         )
 
         if (
@@ -184,6 +191,7 @@ def run_optimization(
                 "lock_contract": _lock_contract_meta(
                     contract, scenario, seed_schedule, scenario_lock_warning=scenario_lock_warning
                 ),
+                "tuning_policy": _tuning_policy_meta(tuning_resolution),
                 "lock_capabilities": lock_capabilities(scenario, seed_schedule),
             }
 
@@ -200,6 +208,7 @@ def run_optimization(
                 scenario_lock_warning=scenario_lock_warning,
                 tuned_constraint_params=result.tuned_constraint_params,
             ),
+            "tuning_policy": _tuning_policy_meta(tuning_resolution),
             "lock_capabilities": lock_capabilities(scenario, seed_schedule),
         }
 
@@ -227,6 +236,7 @@ def run_optimization(
                         scenario_lock_warning=scenario_lock_warning,
                         tuned_constraint_params=result.tuned_constraint_params,
                     ),
+                    "tuning_policy": _tuning_policy_meta(tuning_resolution),
                 },
             )
             payload["schedule"] = result.schedule.model_dump(by_alias=True)
@@ -298,6 +308,20 @@ def _lock_contract_meta(
         if tuned_constraint_params:
             meta["effective"]["tuned_constraint_params"] = tuned_constraint_params
     return meta
+
+
+def _tuning_policy_meta(tuning_resolution: TuningResolution) -> dict[str, Any]:
+    return {
+        "source": tuning_resolution.source,
+        "allow_tunable_params": [
+            {
+                "entity_id": entry.entity_id,
+                "constraint_id": entry.constraint_id,
+                "param_name": entry.param_name,
+            }
+            for entry in tuning_resolution.allow_tunable_params
+        ],
+    }
 
 
 def run_fork(

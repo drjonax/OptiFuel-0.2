@@ -18,7 +18,6 @@ REQUIRED_PATHS = {
     "/runs/optimize",
     "/runs/optimize/capabilities",
     "/runs/optimize/locks/effective",
-    "/scenarios/fork",
 }
 
 

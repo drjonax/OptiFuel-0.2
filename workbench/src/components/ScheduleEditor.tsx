@@ -1,3 +1,6 @@
+import { useMemo } from "react";
+import { edgeUnitFromId } from "../lib/scenarioHelpers";
+
 type Move = { entity?: string; edge?: string; start?: number };
 
 type Props = {
@@ -7,6 +10,9 @@ type Props = {
   onRevert?: () => void;
   entityOptions?: string[];
   edgeOptions?: string[];
+  edgesForEntity?: (entityId: string) => string[];
+  entityHomeUnits?: Record<string, string | null | undefined>;
+  unitIds?: string[];
   selectedMoveIndex: number | null;
   onSelectMove: (index: number) => void;
   activeMoveIndices: Set<number>;
@@ -51,6 +57,16 @@ function SuggestInput({
   );
 }
 
+function edgeCrossesHomeUnit(
+  edgeId: string,
+  homeUnit: string | null | undefined,
+  unitIds: string[],
+): boolean {
+  if (!homeUnit || !edgeId) return false;
+  const edgeUnit = edgeUnitFromId(edgeId, unitIds);
+  return edgeUnit !== null && edgeUnit !== homeUnit;
+}
+
 export function ScheduleEditor({
   data,
   onChange,
@@ -58,6 +74,9 @@ export function ScheduleEditor({
   onRevert,
   entityOptions = [],
   edgeOptions = [],
+  edgesForEntity,
+  entityHomeUnits = {},
+  unitIds = [],
   selectedMoveIndex,
   onSelectMove,
   activeMoveIndices,
@@ -103,6 +122,11 @@ export function ScheduleEditor({
     }
   };
 
+  const edgeOptionsForMove = (entityId: string): string[] => {
+    if (!entityId || !edgesForEntity) return edgeOptions;
+    return edgesForEntity(entityId);
+  };
+
   return (
     <div className="schedule-editor">
       <h2>Schedule Editor</h2>
@@ -128,6 +152,12 @@ export function ScheduleEditor({
               moves.map((move, index) => {
                 const selected = selectedMoveIndex === index;
                 const active = activeMoveIndices.has(index);
+                const entityId = move.entity ?? "";
+                const edgeWarning = edgeCrossesHomeUnit(
+                  move.edge ?? "",
+                  entityHomeUnits[entityId],
+                  unitIds,
+                );
                 return (
                   <tr
                     key={`${move.entity}-${move.edge}-${index}`}
@@ -148,11 +178,17 @@ export function ScheduleEditor({
                       <SuggestInput
                         id={`move-edge-${index}`}
                         value={move.edge ?? ""}
-                        options={edgeOptions}
+                        options={edgeOptionsForMove(entityId)}
                         ariaLabel={`Edge ${index}`}
                         disabled={disabled}
                         onChange={(v) => updateMove(index, "edge", v)}
                       />
+                      {edgeWarning && (
+                        <p className="hint schedule-edge-warning" role="note">
+                          Edge unit does not match {entityId} home unit ({entityHomeUnits[entityId]}). Allowed for
+                          advanced edits.
+                        </p>
+                      )}
                     </td>
                     <td>
                       <input

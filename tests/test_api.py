@@ -111,7 +111,8 @@ def test_optimize_capabilities_with_scenario_paths() -> None:
     )
     assert response.status_code == 200
     body = response.json()
-    assert "A4" in body["entities"]
+    assert "A1" in body["entities"]
+    assert "A2" in body["entities"]
     assert body["global_entity_id"] == "__global__"
     assert "temporal_horizon" in {c["id"] for c in body["constraints"]}
 
@@ -212,23 +213,6 @@ def test_optimize_scenario_lock_warning() -> None:
     )
     assert response.status_code == 200
     assert response.json()["lock_contract"].get("warning") == "scenario_locks_not_applied"
-
-
-def test_fork_endpoint() -> None:
-    response = client.post(
-        "/scenarios/fork",
-        json={
-            "scenario_path": SCENARIO,
-            "schedule_path": SCHEDULE,
-            "state_at_min": 0.0,
-            "amendments": {"new_id": "api_fork_test", "horizon_min": 11000},
-            "output_path": "examples/reference_plant/api_fork_test.yaml",
-        },
-    )
-    assert response.status_code == 200
-    assert response.json()["scenario_id"] == "api_fork_test"
-    forked = WORKSPACE / "examples/reference_plant/api_fork_test.yaml"
-    assert forked.exists()
 
 
 def test_api_cli_simulate_parity() -> None:

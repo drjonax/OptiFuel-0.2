@@ -16,6 +16,7 @@ class EntityState(BaseModel):
 class Entity(BaseModel):
     id: str
     location: str
+    home_unit: str | None = None
     position: int | None = None
     state: EntityState = Field(default_factory=EntityState)
     history: list[dict[str, Any]] = Field(default_factory=list)

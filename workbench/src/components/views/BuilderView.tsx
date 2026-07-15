@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { ForkPanel } from "../ForkPanel";
 import { ScheduleEditor } from "../ScheduleEditor";
-import { ScenarioParamsPanel } from "../ScenarioParamsPanel";
+import { GlobalParametersPanel } from "../GlobalParametersPanel";
+import { StartingConditionsPanel } from "../StartingConditionsPanel";
 import type { ScheduleMismatch } from "../../lib/scenarioSchedule";
 import { isValidSaveAsScenarioPath } from "../../lib/scenarioSchedule";
 
@@ -13,6 +13,9 @@ type Props = {
   scheduleMismatch: ScheduleMismatch;
   entityOptions: string[];
   edgeOptions: string[];
+  edgesForEntity?: (entityId: string) => string[];
+  entityHomeUnits?: Record<string, string | null | undefined>;
+  unitIds: string[];
   isScenarioDirty: boolean;
   isScheduleDirty: boolean;
   loading: boolean;
@@ -25,9 +28,12 @@ type Props = {
   onRevertScenario: () => void;
   onRevertSchedule: () => void;
   onLoadSiblingSchedule: () => void;
-  onFork: (stateAt: number, amendments: Record<string, unknown>, precedence?: string) => void;
-  onAddEfa: () => void;
+  onAddEfa: (homeUnit: string) => void;
   onAddUnit: () => void;
+  addEfaHomeUnit: string;
+  onAddEfaHomeUnitChange: (unitId: string) => void;
+  unitIds: string[];
+  onMutationError: (message: string) => void;
   selectedMoveIndex: number | null;
   onSelectMove: (index: number) => void;
   activeMoveIndices: Set<number>;
@@ -148,6 +154,9 @@ export function BuilderView({
   scheduleMismatch,
   entityOptions,
   edgeOptions,
+  edgesForEntity,
+  entityHomeUnits,
+  unitIds,
   isScenarioDirty,
   isScheduleDirty,
   loading,
@@ -160,9 +169,11 @@ export function BuilderView({
   onRevertScenario,
   onRevertSchedule,
   onLoadSiblingSchedule,
-  onFork,
   onAddEfa,
   onAddUnit,
+  addEfaHomeUnit,
+  onAddEfaHomeUnitChange,
+  onMutationError,
   selectedMoveIndex,
   onSelectMove,
   activeMoveIndices,
@@ -186,20 +197,53 @@ export function BuilderView({
         )}
 
         <section className="panel builder-section">
-          <ScenarioParamsPanel data={scenarioData} onChange={onScenarioChange} disabled={loading} />
+          <GlobalParametersPanel
+            data={scenarioData}
+            onChange={onScenarioChange}
+            onMutationError={onMutationError}
+            disabled={loading}
+          />
+          <StartingConditionsPanel
+            scenarioData={scenarioData}
+            scheduleData={scheduleData}
+            onScenarioChange={onScenarioChange}
+            onScheduleChange={onScheduleChange}
+            onMutationError={onMutationError}
+            disabled={loading}
+          />
 
           <div className="topology-fleet-actions">
             <h3 id="topology-fleet-heading">Topology &amp; Fleet Actions</h3>
             <p className="hint" id="topology-fleet-hint">
-              Add a new assembly (EFA) with default physics, or scaffold a reactor unit with core, pool, edges, unit
-              mode, and shared resource wiring. Changes stay unsaved until you save the scenario.
+              Add a new assembly (EFA) with default physics and a staggered `fresh_to_staging` seed move, or scaffold
+              a reactor unit with core, pool, edges, unit mode, and shared resource wiring.
             </p>
-            <div className="button-row" role="group" aria-labelledby="topology-fleet-heading">
+            <div className="button-row builder-fleet-controls" role="group" aria-labelledby="topology-fleet-heading">
+              <label htmlFor="add-efa-unit" className="builder-inline-label">
+                Home unit
+                <select
+                  id="add-efa-unit"
+                  value={addEfaHomeUnit}
+                  disabled={loading || !scenarioData || unitIds.length === 0}
+                  onChange={(e) => onAddEfaHomeUnitChange(e.target.value)}
+                  aria-describedby="topology-fleet-hint"
+                >
+                  {unitIds.length === 0 ? (
+                    <option value="">No units</option>
+                  ) : (
+                    unitIds.map((unitId) => (
+                      <option key={unitId} value={unitId}>
+                        {unitId}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={onAddEfa}
-                disabled={loading || !scenarioData}
+                onClick={() => onAddEfa(addEfaHomeUnit)}
+                disabled={loading || !scenarioData || unitIds.length === 0 || !addEfaHomeUnit}
                 aria-describedby="topology-fleet-hint"
               >
                 Add EFA
@@ -225,6 +269,9 @@ export function BuilderView({
             onRevert={isScheduleDirty ? onRevertSchedule : undefined}
             entityOptions={entityOptions}
             edgeOptions={edgeOptions}
+            edgesForEntity={edgesForEntity}
+            entityHomeUnits={entityHomeUnits}
+            unitIds={unitIds}
             selectedMoveIndex={selectedMoveIndex}
             onSelectMove={onSelectMove}
             activeMoveIndices={activeMoveIndices}
@@ -272,10 +319,6 @@ export function BuilderView({
             onRevertScenario={onRevertScenario}
             onSaveAsScenario={onSaveAsScenario}
           />
-        </section>
-
-        <section className="panel builder-section">
-          <ForkPanel disabled={loading} onFork={onFork} />
         </section>
       </aside>
     </div>

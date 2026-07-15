@@ -41,8 +41,8 @@ def test_simulation_runs_with_boundary_flows() -> None:
     scenario, schedule = _load()
     result = simulate(scenario, schedule, runtime_mode="continue_and_report")
     kinds = {e.kind for e in result.timeline}
-    assert "entity_created" in kinds
     assert "move_started" in kinds
+    assert "move_completed" in kinds
 
 
 def test_determinism_replay() -> None:

@@ -39,7 +39,6 @@ def test_infeasible_schedule_produces_constraint_signal() -> None:
     scenario = Scenario.model_validate(load_yaml(REFERENCE_SCENARIO))
     scenario.entities[0].location = "corridor_staging"
     scenario.entities[1].location = "corridor_staging"
-    scenario.entities[2].location = "corridor_staging"
     schedule = Schedule(schema_version=4, scenario="reference_plant", moves=[])
     result = simulate(scenario, schedule, runtime_mode="continue_and_report")
     assert any(v.constraint_id == "cap_staging" and v.hard for v in result.violations)

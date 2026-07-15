@@ -47,6 +47,16 @@ export type OptimizeLockOptions = {
   constraint_param_locks?: ConstraintParamLockRecord[];
 };
 
+export type TunableParamRef = {
+  entity_id: string;
+  constraint_id: string;
+  param_name: string;
+};
+
+export type TuningPolicy = {
+  allow_tunable_params: TunableParamRef[];
+};
+
 export type LockCapabilities = {
   scenario_tunable_active: boolean;
   allowlisted_scenario_paths: string[];
@@ -108,6 +118,10 @@ export type RunResult = {
     effective?: LockEffectivePreview & {
       tuned_constraint_params?: Record<string, Record<string, number>>;
     };
+  };
+  tuning_policy?: {
+    source?: string;
+    allow_tunable_params?: TunableParamRef[];
   };
   lock_capabilities?: MatrixLockCapabilities;
 };
@@ -198,6 +212,7 @@ export async function optimize(
   scenarioPath: string,
   seedSchedulePath: string,
   lockOptions?: OptimizeLockOptions,
+  tuningPolicy?: TuningPolicy,
 ) {
   const body: Record<string, unknown> = {
     scenario_path: scenarioPath,
@@ -214,6 +229,9 @@ export async function optimize(
       body.constraint_param_locks = lockOptions.constraint_param_locks;
     }
   }
+  if (tuningPolicy) {
+    body.tuning_policy = tuningPolicy;
+  }
   return request<RunResult>("/runs/optimize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -221,16 +239,3 @@ export async function optimize(
   });
 }
 
-export async function forkScenario(payload: {
-  scenario_path: string;
-  schedule_path: string;
-  state_at_min: number;
-  amendments: Record<string, unknown>;
-  precedence?: string;
-}) {
-  return request<{ scenario_id: string; path: string; digest: string }>("/scenarios/fork", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-}

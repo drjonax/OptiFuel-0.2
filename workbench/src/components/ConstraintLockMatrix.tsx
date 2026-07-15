@@ -48,11 +48,19 @@ export function ConstraintLockMatrix({
       <div className="lock-matrix-legend" aria-hidden="true">
         <span className="lock-matrix-legend-item">
           <span className="lock-matrix-legend-swatch lock-matrix-legend-swatch-locked" />
-          Locked — optimizer keeps baseline params
+          Locked - held constant
         </span>
         <span className="lock-matrix-legend-item">
           <span className="lock-matrix-legend-swatch lock-matrix-legend-swatch-unlocked" />
-          Unlocked — optimizer may tune params
+          Tunable - optimizer may change
+        </span>
+        <span className="lock-matrix-legend-item">
+          <span className="lock-matrix-legend-swatch lock-matrix-legend-swatch-na" />
+          Not applicable
+        </span>
+        <span className="lock-matrix-legend-item">
+          <span className="lock-matrix-legend-swatch lock-matrix-legend-swatch-fixed" />
+          Fixed in v1
         </span>
       </div>
 
@@ -144,10 +152,9 @@ export function ConstraintLockMatrix({
                             type="checkbox"
                             checked={locked}
                             disabled={controlsDisabled}
-                            aria-label={`Lock tuning for ${rowLabel(entityId, globalId)} / ${constraint.id}`}
+                            aria-label={`${locked ? "Locked" : "Tunable"}: ${rowLabel(entityId, globalId)} / ${constraint.id}`}
                             onChange={(event) => onToggleLock(entityId, constraint.id, event.target.checked)}
                           />
-                          <span className="lock-matrix-checkbox-text">Lock</span>
                         </label>
                         {showSharedHint ? (
                           <p className="hint lock-matrix-shared-hint" role="note">
