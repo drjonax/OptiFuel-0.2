@@ -58,30 +58,35 @@ export function OptimizationDeltaSummary({ delta, optimizeOutcome, optimizeReaso
       {scheduleChanges && (
         <div className="optimization-delta-section">
           <h3>How it was done</h3>
-          <ul className="optimization-delta-stats">
+          <ul className="optimization-delta-stats optimization-delta-stats-grid">
             {scheduleChanges.retimed > 0 && (
               <li>
-                <span className="delta-label">Retimed:</span> {scheduleChanges.retimed} move(s)
+                <span className="delta-label">Retimed</span>
+                <div className="value">{scheduleChanges.retimed}</div>
               </li>
             )}
             {scheduleChanges.rerouted > 0 && (
               <li>
-                <span className="delta-label">Rerouted:</span> {scheduleChanges.rerouted} move(s)
+                <span className="delta-label">Rerouted</span>
+                <div className="value">{scheduleChanges.rerouted}</div>
               </li>
             )}
             {scheduleChanges.added > 0 && (
               <li>
-                <span className="delta-label">Added:</span> {scheduleChanges.added} move(s)
+                <span className="delta-label">Added</span>
+                <div className="value">{scheduleChanges.added}</div>
               </li>
             )}
             {scheduleChanges.removed > 0 && (
               <li>
-                <span className="delta-label">Removed:</span> {scheduleChanges.removed} move(s)
+                <span className="delta-label">Removed</span>
+                <div className="value">{scheduleChanges.removed}</div>
               </li>
             )}
             {scheduleChanges.unchanged > 0 && (
               <li>
-                <span className="delta-label">Unchanged:</span> {scheduleChanges.unchanged} move(s)
+                <span className="delta-label">Unchanged</span>
+                <div className="value">{scheduleChanges.unchanged}</div>
               </li>
             )}
           </ul>

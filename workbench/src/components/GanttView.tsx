@@ -38,7 +38,9 @@ export function GanttView({
 
   return (
     <section className="gantt" aria-label="Schedule Gantt">
-      <h3>Gantt</h3>
+      <header className="section-header">
+        <h3>Gantt</h3>
+      </header>
       <ul role="list">
         {moves.map((move) => {
           const duration = moveDuration(move.edge, edges);

@@ -78,7 +78,7 @@ export function TimelineScrubber({
           onChange={(e) => onScrub(Number(e.target.value))}
         />
       </label>
-      <ol className="timeline-events" aria-label="Timeline events">
+      <ol className="timeline-events inspector-table-scroll" aria-label="Timeline events">
         {timeline.slice(0, 40).map((event, index) => {
           const seen = Number(event.t_min) <= scrubTime;
           const selected = selectedEventIndex === index;

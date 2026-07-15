@@ -243,10 +243,11 @@ export function OptimizeView({
         )}
       </section>
 
-      <section className="panel optimize-results">
+      <section className="panel optimize-results optimize-results-stack">
         <FeasibilitySummary
           result={optimizeResult}
           emptyMessage="Run optimization to inspect feasibility and objective."
+          compact
         />
         <OptimizationDeltaSummary
           delta={optimizationDelta}
@@ -274,8 +275,11 @@ export function OptimizeView({
             </div>
           </div>
         )}
-        <ResultsInspector result={optimizeResult} />
-        <ArtifactBrowser result={optimizeResult} disabled={loading} />
+        <section className="inspector-shell">
+          <h2>Inspector</h2>
+          <ResultsInspector result={optimizeResult} hideSummaryMetrics />
+          <ArtifactBrowser result={optimizeResult} disabled={loading} />
+        </section>
       </section>
     </div>
   );

@@ -1,0 +1,51 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+
+:root {
+  --color-primary: #f7a501;
+  --color-primary-pressed: #dd9001;
+  --color-primary-active: #d08d02;
+  --color-primary-border: #d08d02;
+  --color-on-primary: #23251d;
+  --color-ink: #23251d;
+  --color-body: #4d4f46;
+  --color-mute: #6c6e63;
+  --color-hairline: #bfc1b7;
+  --color-hairline-soft: #dcdfd2;
+  --color-hairline-muted: #d9dbd1;
+  --color-hairline-divider: #e3e5dc;
+  --color-canvas: #eeefe9;
+  --color-surface-card: #ffffff;
+  --color-surface-soft: #f6f7f2;
+  --color-surface-muted: #e5e7e0;
+  --color-surface-warn: #fff7e4;
+  --color-surface-warn-alt: #fff8eb;
+  --color-surface-error: #fff2f1;
+  --color-surface-active: #f3f8ef;
+  --color-accent-blue-soft: #dceaf6;
+  --color-accent-green: #2c8c66;
+  --color-accent-green-soft: #d9eddf;
+  --color-accent-green-dark: #24553b;
+  --color-accent-green-olive: #5a6f47;
+  --color-accent-red: #cd4239;
+  --color-accent-red-dark: #8f2420;
+  --color-accent-red-soft: #f7d6d3;
+  --color-accent-red-border: #dca8a6;
+  --color-accent-amber: #9b6b00;
+  --color-accent-amber-dark: #8a6400;
+  --color-bar-planned: #9aa38d;
+  --color-bar-track: #d9dbd1;
+
+  --font-sans: "IBM Plex Sans Variable", "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "Source Code Pro", monospace;
+
+  --rounded-xs: 2px;
+  --rounded-sm: 4px;
+  --rounded-md: 6px;
+  --rounded-lg: 8px;
+  --rounded-full: 9999px;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+}

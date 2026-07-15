@@ -99,8 +99,10 @@ export function SimulateView({
         )}
       </section>
 
-      <div className="simulate-split">
-        <section className="panel simulate-primary" aria-labelledby="simulate-heading">
+      {simulateResult && <FeasibilitySummary result={simulateResult} compact />}
+
+      <div className="simulate-viewer-shell">
+        <section className="panel simulate-primary simulate-gantt-panel" aria-labelledby="simulate-heading">
           <GanttView
             moves={moves}
             edges={edges}
@@ -113,7 +115,7 @@ export function SimulateView({
           />
         </section>
 
-        <section className="panel simulate-secondary panel-linked">
+        <section className="panel simulate-secondary simulate-topology-panel panel-linked">
           <TopologyView
             nodes={nodes}
             edges={edges}
@@ -123,6 +125,9 @@ export function SimulateView({
             disabled={loading}
             hasRunData={timeline.length > 0}
           />
+        </section>
+
+        <section className="panel simulate-timeline-panel">
           <TimelineScrubber
             timeline={timeline}
             scrubTime={scrubTime}
@@ -135,9 +140,9 @@ export function SimulateView({
         </section>
       </div>
 
-      <section className="panel simulate-results">
-        <FeasibilitySummary result={simulateResult} />
-        <ResultsInspector result={simulateResult} />
+      <section className="inspector-shell simulate-results">
+        <h2>Inspector</h2>
+        <ResultsInspector result={simulateResult} hideSummaryMetrics />
         <ArtifactBrowser result={simulateResult} disabled={loading} />
       </section>
     </div>

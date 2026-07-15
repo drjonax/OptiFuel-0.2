@@ -43,6 +43,15 @@ import { addEfa, addUnitScaffold } from "./lib/scenarioMutations";
 
 const DEFAULT_SCENARIO = "examples/reference_plant/scenario.yaml";
 
+const VIEW_META: Record<
+  WorkbenchView,
+  { subtitle: string }
+> = {
+  builder: { subtitle: "Build scenarios and schedules" },
+  simulate: { subtitle: "Simulate feasibility and playback" },
+  optimize: { subtitle: "Optimize schedule timing" },
+};
+
 function asTimeline(events: Array<Record<string, unknown>>): TimelineEvent[] {
   return events.map((event) => ({
     t_min: Number(event.t_min ?? 0),
@@ -533,29 +542,37 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="topbar-title">
-          <h1>OptiFuel Workbench</h1>
-          <p>Build scenarios, simulate feasibility, and optimize schedules.</p>
+    <div className="app">
+      <header className="app-header">
+        <div className="header-row">
+          <div className="header-title">
+            <h1>OptiFuel Workbench</h1>
+            <p className="header-subtitle">{VIEW_META[activeView].subtitle}</p>
+          </div>
+          <div className="header-toolbar">
+            <div className="header-badges-row">
+              <span className="badge">v1-alpha</span>
+              {isScenarioDirty && <span className="badge badge-dirty">Scenario unsaved</span>}
+              {isScheduleDirty && <span className="badge badge-dirty">Schedule unsaved</span>}
+            </div>
+            <ViewTabs activeView={activeView} onChange={handleViewChange} disabled={loading} />
+          </div>
         </div>
-        <span className="badge">v1-alpha</span>
-        <ViewTabs activeView={activeView} onChange={handleViewChange} disabled={loading} />
       </header>
 
-      <div className="status-stack" aria-live="polite">
+      <div className="banner-row" aria-live="polite">
         {loading && (
-          <p className="status" role="status">
+          <p className="status banner info" role="status">
             Loading...
           </p>
         )}
         {!loading && !error && (!scenarioData || !scheduleData) && (
-          <p className="empty" role="status">
+          <p className="empty banner info" role="status">
             No scenario data is loaded yet. Select a scenario in Builder or reload the workbench.
           </p>
         )}
         {error && (
-          <p className="error" role="alert">
+          <p className="error banner warn" role="alert">
             {error}
           </p>
         )}

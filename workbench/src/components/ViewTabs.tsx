@@ -58,7 +58,7 @@ export function ViewTabs({ activeView, onChange, disabled }: Props) {
   };
 
   return (
-    <div className="view-tabs" role="tablist" aria-label="Workbench views">
+    <div className="view-tabs app-section-nav" role="tablist" aria-label="Workbench views">
       {TABS.map((tab, index) => (
         <button
           key={tab.id}

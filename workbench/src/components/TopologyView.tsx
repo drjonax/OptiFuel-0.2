@@ -32,13 +32,15 @@ export function TopologyView({
 
   return (
     <section className="topology" aria-label="Topology view">
-      <h3>Topology</h3>
+      <header className="section-header">
+        <h3>Topology</h3>
+      </header>
       {!hasRunData && (
         <p className="hint" role="status">
           Run a simulation to animate occupancy and active transfers.
         </p>
       )}
-      <div className="node-grid" role="list" aria-label="Plant nodes">
+      <div className="occupancy-grid node-grid" role="list" aria-label="Plant nodes">
         {nodes.map((node) => {
           const occupants = playback.occupantsByNode[node.id] ?? [];
           const isActive = occupants.length > 0;
@@ -46,11 +48,11 @@ export function TopologyView({
             <div
               key={node.id}
               role="listitem"
-              className={`node-card type-${node.type} ${isActive ? "is-active" : ""}`}
+              className={`occupancy-cell node-card type-${node.type} ${isActive ? "is-active" : ""}`}
               aria-label={`${node.id} ${node.type}${occupants.length ? `, ${occupants.length} assemblies` : ""}`}
             >
-              <strong>{node.id}</strong>
-              <span className="node-type">{node.type}</span>
+              <label>{node.id}</label>
+              <span className="value">{node.type}</span>
               <span className="node-unit">{node.unit ?? "shared"}</span>
               {occupants.length > 0 && (
                 <ul className="occupant-list" aria-label={`Assemblies at ${node.id}`}>
