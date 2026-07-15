@@ -44,6 +44,7 @@ class Violation(BaseModel):
     message: str
     entity_ids: list[str] = Field(default_factory=list)
     t_min: float | None = None
+    reason_code: str | None = None
 
 
 def evaluate_constraint(

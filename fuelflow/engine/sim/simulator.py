@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from fuelflow.constraints.vocabulary import Violation, evaluate_constraint
+from fuelflow.engine.sim.calendar_intervals import build_resource_availability_cache, interval_fits_in_availability
 from fuelflow.entities.models import Entity, EntityState
 from fuelflow.scenario.model import RuntimeMode, Scenario, Schedule
 
@@ -121,6 +122,7 @@ def simulate(
 
     times = sorted(set([0.0, scenario.horizon_min] + list(events_by_time.keys())))
     resource_rr_index: dict[str, int] = {}
+    resource_availability = build_resource_availability_cache(scenario.resources, scenario.horizon_min)
 
     def entity_heat(entity_id: str, t_min: float) -> float:
         model = scenario.physics.decay_for(entity_id)
@@ -175,7 +177,13 @@ def simulate(
                     if runtime_mode == "fail_fast":
                         return
 
-    def emit_schedule_executability_violation(t_min: float, move: ActiveMove, reason: str) -> None:
+    def emit_schedule_executability_violation(
+        t_min: float,
+        move: ActiveMove,
+        reason: str,
+        *,
+        reason_code: str,
+    ) -> None:
         nonlocal failed
         violation = Violation(
             rule_id="C-schedule-executability",
@@ -188,6 +196,7 @@ def simulate(
             ),
             entity_ids=[move.entity],
             t_min=t_min,
+            reason_code=reason_code,
         )
         violations.append(violation)
         timeline.append(
@@ -198,6 +207,7 @@ def simulate(
                 detail={
                     "constraint_id": "schedule_executability",
                     "message": violation.message,
+                    "reason_code": reason_code,
                 },
             )
         )
@@ -269,12 +279,43 @@ def simulate(
         for move in sorted(starting, key=sort_key):
             edge = edge_map[move.edge]
             from_node = node_map[edge.from_node]
+
+            calendar_blocked: str | None = None
+            for res in move.resources:
+                availability = resource_availability.get(res, [])
+                if not interval_fits_in_availability(move.start_min, move.end_min, availability):
+                    calendar_blocked = res
+                    break
+            if calendar_blocked is not None:
+                emit_schedule_executability_violation(
+                    t_min,
+                    move,
+                    f"resource {calendar_blocked} unavailable for move interval "
+                    f"[{move.start_min}, {move.end_min})",
+                    reason_code="resource_calendar_blocked",
+                )
+                if runtime_mode == "fail_fast":
+                    break
+                continue
+
+            if any(active.entity == move.entity for active in active_moves):
+                emit_schedule_executability_violation(
+                    t_min,
+                    move,
+                    f"entity {move.entity} already active in overlapping move",
+                    reason_code="entity_overlap",
+                )
+                if runtime_mode == "fail_fast":
+                    break
+                continue
+
             if from_node.type == "core" and from_node.unit != "shared":
                 if not _unit_mode_allows_refueling(scenario, from_node.unit, t_min):
                     emit_schedule_executability_violation(
                         t_min,
                         move,
                         f"unit mode forbids refueling for unit {from_node.unit}",
+                        reason_code="unit_mode_forbidden",
                     )
                     if runtime_mode == "fail_fast":
                         break
@@ -291,13 +332,17 @@ def simulate(
                     t_min,
                     move,
                     f"resource {blocked_resource} capacity exceeded at start time",
+                    reason_code="resource_capacity_exceeded",
                 )
                 if runtime_mode == "fail_fast":
                     break
                 continue
             if move.entity not in entities:
                 emit_schedule_executability_violation(
-                    t_min, move, "entity is unavailable at start time"
+                    t_min,
+                    move,
+                    "entity is unavailable at start time",
+                    reason_code="entity_location_mismatch",
                 )
                 if runtime_mode == "fail_fast":
                     break
@@ -310,6 +355,7 @@ def simulate(
                         f"entity at {entities[move.entity].location}, "
                         f"expected {edge.from_node}"
                     ),
+                    reason_code="entity_location_mismatch",
                 )
                 if runtime_mode == "fail_fast":
                     break

@@ -67,6 +67,35 @@ def validate_scenario(scenario: Scenario) -> list[ValidationIssue]:
     if scenario.horizon_min <= 0:
         issues.append(ValidationIssue("V-04", "error", "horizon_min must be positive"))
 
+    for resource in scenario.resources:
+        for idx, window in enumerate(resource.calendar):
+            start = float(window.from_min)
+            end = float(window.to_min)
+            if start < 0 or end < 0:
+                issues.append(
+                    ValidationIssue(
+                        "V-12",
+                        "error",
+                        f"Resource {resource.id} calendar window {idx} has negative bounds",
+                    ),
+                )
+            if start >= end:
+                issues.append(
+                    ValidationIssue(
+                        "V-12",
+                        "error",
+                        f"Resource {resource.id} calendar window {idx} requires from < to",
+                    ),
+                )
+            if end > scenario.horizon_min:
+                issues.append(
+                    ValidationIssue(
+                        "V-12",
+                        "error",
+                        f"Resource {resource.id} calendar window {idx} exceeds horizon",
+                    ),
+                )
+
     return issues
 
 

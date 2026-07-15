@@ -79,6 +79,14 @@ export type LockEffectivePreview = {
   shared_unlocked_constraint_ids: string[];
 };
 
+export type InfeasibleCategory =
+  | "resource_calendar_blocked"
+  | "resource_capacity_exceeded"
+  | "entity_overlap"
+  | "entity_location_mismatch"
+  | "unit_mode_forbidden"
+  | "constraint_violation_other";
+
 export type RunResult = {
   manifest?: Record<string, unknown>;
   timeline?: Array<Record<string, unknown>>;
@@ -86,6 +94,7 @@ export type RunResult = {
   objective?: { total: number; terms: Array<Record<string, unknown>> };
   outcome?: "feasible" | "infeasible_or_timeout";
   reason?: "infeasible" | "timeout" | "structure_violation" | null;
+  infeasible_category?: InfeasibleCategory | null;
   score_total?: number | null;
   schedule?: { moves?: Array<Record<string, unknown>> };
   artifacts?: RunResult;

@@ -99,7 +99,11 @@ export function SimulateView({
         )}
       </section>
 
-      {simulateResult && <FeasibilitySummary result={simulateResult} compact />}
+      <FeasibilitySummary
+        result={simulateResult}
+        emptyMessage="No run yet — run simulation to evaluate feasibility."
+        compact
+      />
 
       <div className="simulate-viewer-shell">
         <section className="panel simulate-primary simulate-gantt-panel" aria-labelledby="simulate-heading">

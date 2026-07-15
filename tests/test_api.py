@@ -52,6 +52,12 @@ def test_simulate_endpoint() -> None:
     body = response.json()
     assert "manifest" in body
     assert body["manifest"]["scenario_id"] == "reference_plant"
+    assert body["outcome"] in {"feasible", "infeasible_or_timeout"}
+    assert "reason" in body
+    assert "infeasible_category" in body
+    assert "timeline" in body
+    assert "violations" in body
+    assert "objective" in body
 
 
 def test_optimize_endpoint() -> None:

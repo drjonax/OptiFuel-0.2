@@ -16,6 +16,7 @@ from fuelflow.engine.opt.locks import (
 )
 from fuelflow.io.paths import resolve_seed_schedule_path
 from fuelflow.engine.sim.simulator import simulate
+from fuelflow.engine.sim.feasibility import map_simulation_outcome
 from fuelflow.io.artifacts import create_run_directory, write_artifact_bundle
 from fuelflow.io.canonical import digest
 from fuelflow.io.yaml_io import YamlIOError, cleanup_orphan_temps, load_yaml, save_yaml
@@ -90,7 +91,7 @@ def run_simulation(
         sim = simulate(scenario, schedule, runtime_mode=runtime_mode)  # type: ignore[arg-type]
         objective = score_objective(sim.to_objective_metrics(), scenario.objective)
         run_dir = create_run_directory(workspace)
-        return write_artifact_bundle(
+        bundle = write_artifact_bundle(
             run_dir,
             scenario=scenario,
             schedule=schedule,
@@ -98,6 +99,8 @@ def run_simulation(
             objective=objective,
             runtime_mode=runtime_mode,
         )
+        bundle.update(map_simulation_outcome(failed=sim.failed, violations=sim.violations))
+        return bundle
     finally:
         with _run_lock:
             _active_runs -= 1

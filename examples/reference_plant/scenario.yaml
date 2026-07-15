@@ -240,6 +240,14 @@ entities:
     discharge_time_min: null
     heat_kw: 1
   history: []
+- id: A7
+  location: fresh_store
+  position: null
+  state:
+    burnup_mwd_kgu: 0
+    discharge_time_min: null
+    heat_kw: 1
+  history: []
 resources:
 - id: fhm_1
   type: fhm
@@ -423,6 +431,12 @@ physics:
       heat_kw: 1
     - time_min: 5000
       heat_kw: 12
+  - entity_id: A7
+    table:
+    - time_min: 0
+      heat_kw: 1
+    - time_min: 5000
+      heat_kw: 12
   core_exit_states:
   - entity_id: A1
     cycle: 1
@@ -441,6 +455,10 @@ physics:
     burnup_mwd_kgu: 22
     discharge_time_min: 4032
   - entity_id: A6
+    cycle: 1
+    burnup_mwd_kgu: 22
+    discharge_time_min: 4032
+  - entity_id: A7
     cycle: 1
     burnup_mwd_kgu: 22
     discharge_time_min: 4032

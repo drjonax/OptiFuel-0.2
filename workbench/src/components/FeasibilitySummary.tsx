@@ -1,4 +1,5 @@
 import type { RunResult } from "../api";
+import { deriveFeasibilityVerdict } from "../lib/feasibilityVerdict";
 
 type Props = {
   result: RunResult | null;
@@ -11,9 +12,11 @@ export function FeasibilitySummary({
   emptyMessage = "Run a simulation to check feasibility.",
   compact = false,
 }: Props) {
+  const stripClass = compact ? "verdict-strip verdict-strip--compact" : "verdict-strip";
+
   if (!result) {
     return (
-      <section className="feasibility-summary" aria-label="Feasibility summary">
+      <section className={`feasibility-summary ${stripClass}`} aria-label="Feasibility summary">
         <h2>Feasibility</h2>
         <p className="empty">{emptyMessage}</p>
       </section>
@@ -22,43 +25,52 @@ export function FeasibilitySummary({
 
   const violations = result.violations ?? [];
   const hardViolations = violations.filter((v) => v.hard);
-  const outcome = result.outcome ?? (result.manifest ? "completed" : "unknown");
-  const isFeasible = hardViolations.length === 0 && outcome !== "infeasible_or_timeout";
+  const { outcomeLabel, isFeasible } = deriveFeasibilityVerdict(result);
   const objectiveTotal = result.objective?.total ?? result.score_total;
-
-  const stripClass = compact ? "verdict-strip verdict-strip--compact" : "verdict-strip";
 
   return (
     <section className={`feasibility-summary ${stripClass}`} aria-label="Feasibility summary">
       <h2>Feasibility</h2>
-      <div className="summary-grid">
+      <dl className="summary-grid">
         <div className="summary-item">
-          <label>Verdict</label>
-          <div className={`value ${isFeasible ? "pass" : "fail"}`}>
+          <dt>Verdict</dt>
+          <dd className={isFeasible ? "pass" : "fail"} aria-live="polite">
             {isFeasible ? "Feasible" : "Not feasible"}
+          </dd>
+        </div>
+        <div className="summary-item">
+          <dt>Outcome</dt>
+          <dd>{outcomeLabel}</dd>
+        </div>
+        {result.infeasible_category ? (
+          <div className="summary-item">
+            <dt>Category</dt>
+            <dd>{result.infeasible_category}</dd>
           </div>
-        </div>
+        ) : null}
         <div className="summary-item">
-          <label>Outcome</label>
-          <div className="value">{String(outcome)}</div>
-        </div>
-        <div className="summary-item">
-          <label>Violations</label>
-          <div className={`value ${hardViolations.length ? "fail" : "pass"}`}>
+          <dt>Violations</dt>
+          <dd className={hardViolations.length ? "fail" : "pass"}>
             {violations.length} ({hardViolations.length} hard)
-          </div>
+          </dd>
         </div>
         <div className="summary-item">
-          <label>Objective</label>
-          <div className="value">{objectiveTotal ?? "n/a"}</div>
+          <dt>Objective</dt>
+          <dd>{objectiveTotal ?? "n/a"}</dd>
         </div>
-      </div>
-      {result.reason && <p className="hint">{result.reason}</p>}
+      </dl>
+      {result.reason ? (
+        <p className="hint">
+          Reason: <strong>{result.reason}</strong>
+        </p>
+      ) : null}
       {hardViolations.length > 0 && (
         <ul className="feasibility-violations">
           {hardViolations.slice(0, 5).map((v, index) => (
             <li key={`${v.constraint_id}-${index}`}>
-              <span className="violation-hard">{String(v.message)}</span>
+              <span className="violation-hard" title={String(v.message)}>
+                {String(v.message)}
+              </span>
             </li>
           ))}
         </ul>

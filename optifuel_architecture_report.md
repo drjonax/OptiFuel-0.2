@@ -224,6 +224,10 @@ Sources: `workbench/src/api.ts`, `fuelflow/api/app.py`, `fuelflow/services.py`, 
 
 The simulator constructs event times from arrivals/departures/move bounds, executes a deterministic phase order at each time, and applies runtime mode behavior (`fail_fast` vs `continue_and_report`) when hard violations occur (`fuelflow/engine/sim/simulator.py`).
 
+Admission checks reject move starts when resource calendars block the full move interval, shared resource capacity is exceeded, the same EFA is already active, location continuity fails, or unit refueling mode forbids the move. Multiple concurrent moves in the same unit remain allowed when they do not contend on shared resources/constraints.
+
+Simulation responses now include additive feasibility metadata (`outcome`, `reason`, `infeasible_category`) mapped from hard violations with deterministic category precedence (`fuelflow/engine/sim/feasibility.py`, `fuelflow/services.py`).
+
 ### 7.2 Optimization control pattern
 
 Optimization is mediated by services:

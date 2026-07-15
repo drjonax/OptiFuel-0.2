@@ -709,6 +709,10 @@ tbody tr.active {
   padding-left: 1.2rem;
 }
 
+.feasibility-violations li {
+  overflow-wrap: anywhere;
+}
+
 .optimize-schedule-preview {
   margin: 0 0 8px;
 }
@@ -1278,7 +1282,7 @@ tbody tr.active {
   gap: var(--space-sm);
 }
 
-.summary-item label {
+.summary-item dt {
   display: block;
   font-size: 0.75rem;
   color: var(--color-mute);
@@ -1287,16 +1291,17 @@ tbody tr.active {
   letter-spacing: 0.02em;
 }
 
-.summary-item .value {
+.summary-item dd {
+  margin: 0;
   font-weight: 600;
   color: var(--color-ink);
 }
 
-.summary-item .value.pass {
+.summary-item dd.pass {
   color: var(--color-accent-green);
 }
 
-.summary-item .value.fail {
+.summary-item dd.fail {
   color: var(--color-accent-red);
 }
 

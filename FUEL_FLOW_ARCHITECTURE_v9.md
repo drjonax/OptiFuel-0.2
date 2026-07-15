@@ -36,6 +36,12 @@ v1 MUST ship:
 - both hard-violation runtime modes: `fail_fast` and `continue_and_report`,
 - closed built-in constraint vocabulary (`capacity`, `thermal`, `temporal`, `resource`, `precedence`, `regulatory`),
 - pluggable `DecayModel` with tabulated core exit-state inputs.
+- resource calendar enforcement in simulation admission checks:
+  - `calendar: []` means full-horizon availability,
+  - non-empty calendars use half-open `[from, to)` windows,
+  - move intervals must fit fully inside availability union.
+- simulation response includes additive feasibility fields:
+  - `outcome`, `reason`, and deterministic `infeasible_category`.
 
 ### 2.2 Scenario and replanning semantics
 
