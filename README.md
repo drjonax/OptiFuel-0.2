@@ -41,6 +41,19 @@ Workbench runs at `http://127.0.0.1:5173` and proxies API calls to the backend.
 - `examples/` — Representative 3+ unit scenario fixtures
 - `tests/` — Conformance, golden, determinism suites
 
+## Library scoring API
+
+Objective scoring uses layer-neutral metrics, not simulator result types directly:
+
+```python
+from fuelflow import simulate, score_objective, ObjectiveMetrics, Scenario, Schedule
+
+sim = simulate(scenario, schedule)
+score = score_objective(sim.to_objective_metrics(), scenario.objective)
+```
+
+Import-boundary conformance is enforced in `tests/test_import_boundaries.py` (see `docs/adr/0002-v8-layer-conformance.md`).
+
 ## Release phases
 
 - **v1-alpha** (phase-1): kernel + API + CLI + MVP workbench with fork UI

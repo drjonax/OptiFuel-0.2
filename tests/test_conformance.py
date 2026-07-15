@@ -73,7 +73,7 @@ def test_fork_rejects_illegal_boundary() -> None:
 def test_objective_scoring() -> None:
     scenario, schedule = _load()
     sim = simulate(scenario, schedule)
-    score = score_objective(sim, scenario.objective)
+    score = score_objective(sim.to_objective_metrics(), scenario.objective)
     assert score.total >= 0
 
 
@@ -145,7 +145,7 @@ def test_validate_service() -> None:
 def test_artifact_digest_stable() -> None:
     scenario, schedule = _load()
     sim = simulate(scenario, schedule)
-    score = score_objective(sim, scenario.objective)
+    score = score_objective(sim.to_objective_metrics(), scenario.objective)
     d1 = digest({"timeline": [e.__dict__ for e in sim.timeline], "score": score.total})
     d2 = digest({"timeline": [e.__dict__ for e in sim.timeline], "score": score.total})
     assert d1 == d2

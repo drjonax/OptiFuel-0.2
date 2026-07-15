@@ -73,7 +73,7 @@ def test_optimizer_objective_parity() -> None:
     if result.outcome != "feasible" or result.schedule is None or result.score_total is None:
         pytest.skip("Optimizer did not return feasible schedule on this platform run")
     sim = simulate(scenario, result.schedule, runtime_mode="fail_fast")
-    score = score_objective(sim, scenario.objective)
+    score = score_objective(sim.to_objective_metrics(), scenario.objective)
     delta = abs(result.score_total - score.total)
     rel = delta / max(abs(score.total), PARITY_ABS_TOL)
     assert delta <= PARITY_ABS_TOL or rel <= PARITY_REL_TOL
@@ -106,7 +106,7 @@ def test_timing_first_preserves_structure_and_move_count() -> None:
 def test_timing_first_non_regression_vs_seed_baseline() -> None:
     scenario, seed_schedule = _reference_pair()
     seed_sim = simulate(scenario, seed_schedule, runtime_mode="fail_fast")
-    seed_score = score_objective(seed_sim, scenario.objective)
+    seed_score = score_objective(seed_sim.to_objective_metrics(), scenario.objective)
     result = optimize(scenario, seed=42, time_limit_sec=30.0, seed_schedule=seed_schedule)
     if result.outcome != "feasible" or result.schedule is None or result.score_total is None:
         pytest.skip("Timing-first optimization did not return feasible schedule on this platform run")

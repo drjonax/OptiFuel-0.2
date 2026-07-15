@@ -7,6 +7,7 @@ from pathlib import Path
 from fuelflow.engine.opt.cpsat_adapter import optimize
 from fuelflow.engine.sim.simulator import simulate
 from fuelflow.io.yaml_io import load_yaml
+from fuelflow.objectives.metrics import ObjectiveMetrics
 from fuelflow.objectives.scoring import score_objective
 from fuelflow.scenario.fork import fork_scenario
 from fuelflow.scenario.model import Scenario, Schedule
@@ -25,6 +26,7 @@ __all__ = [
     "Schedule",
     "simulate",
     "optimize",
+    "ObjectiveMetrics",
     "score_objective",
     "fork_scenario",
     "validate_scenario",

@@ -45,7 +45,7 @@ def test_artifact_files_use_canonical_json(tmp_path: Path) -> None:
     scenario = Scenario.model_validate(load_yaml(REFERENCE_SCENARIO))
     schedule = Schedule.model_validate(load_yaml(REFERENCE_SCHEDULE))
     sim = simulate(scenario, schedule)
-    objective = score_objective(sim, scenario.objective)
+    objective = score_objective(sim.to_objective_metrics(), scenario.objective)
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     write_artifact_bundle(

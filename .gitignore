@@ -1,0 +1,27 @@
+# Python runtime and build
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Simulate/optimize run outputs (uuid directories under workspace root)
+artifacts/
+
+# Workbench dev cache (dist/ is committed for static serving)
+workbench/node_modules/
+workbench/tsconfig.tsbuildinfo
+
+# OS noise
+.DS_Store
+Thumbs.db

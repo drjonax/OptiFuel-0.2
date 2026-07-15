@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from fuelflow.engine.sim.simulator import SimulationResult
+from fuelflow.objectives.metrics import ObjectiveMetrics
 from fuelflow.scenario.model import ObjectiveConfig
 
 
@@ -32,21 +32,21 @@ def _normalize(metric: str, raw: float, normalise: dict) -> float:
     return raw
 
 
-def metric_value(metric: str, sim: SimulationResult) -> float:
+def metric_value(metric: str, metrics: ObjectiveMetrics) -> float:
     if metric == "outage_duration_h":
-        return sim.outage_duration_min / 60.0
+        return metrics.outage_duration_min / 60.0
     if metric == "peak_storage_heat_kw":
-        return sim.peak_storage_heat_kw
+        return metrics.peak_storage_heat_kw
     if metric == "handling_ops_count":
-        return float(sim.handling_ops_count)
+        return float(metrics.handling_ops_count)
     return 0.0
 
 
-def score_objective(sim: SimulationResult, config: ObjectiveConfig) -> ObjectiveScore:
+def score_objective(metrics: ObjectiveMetrics, config: ObjectiveConfig) -> ObjectiveScore:
     terms: list[ObjectiveBreakdown] = []
     total = 0.0
     for term in sorted(config.terms, key=lambda t: t.metric):
-        raw = metric_value(term.metric, sim)
+        raw = metric_value(term.metric, metrics)
         normalized = round(_normalize(term.metric, raw, term.normalise), 10)
         weighted = round(normalized * term.weight, 10)
         total = round(total + weighted, 10)

@@ -47,6 +47,15 @@ class SimulationResult:
     outage_duration_min: float
     failed: bool
 
+    def to_objective_metrics(self) -> "ObjectiveMetrics":
+        from fuelflow.objectives.metrics import ObjectiveMetrics
+
+        return ObjectiveMetrics(
+            outage_duration_min=self.outage_duration_min,
+            peak_storage_heat_kw=self.peak_storage_heat_kw,
+            handling_ops_count=self.handling_ops_count,
+        )
+
 
 def _move_key(entity: str, edge: str, start_min: float, ordinal: int) -> str:
     return f"{entity}|{edge}|{start_min}|{ordinal}"

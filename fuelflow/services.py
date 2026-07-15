@@ -88,7 +88,7 @@ def run_simulation(
             raise ServiceError("validation_failed", "Scenario or schedule validation failed")
 
         sim = simulate(scenario, schedule, runtime_mode=runtime_mode)  # type: ignore[arg-type]
-        objective = score_objective(sim, scenario.objective)
+        objective = score_objective(sim.to_objective_metrics(), scenario.objective)
         run_dir = create_run_directory(workspace)
         return write_artifact_bundle(
             run_dir,
@@ -202,7 +202,7 @@ def run_optimization(
 
         if result.outcome == "feasible" and result.schedule:
             sim = simulate(scenario, result.schedule, runtime_mode="fail_fast")
-            objective = score_objective(sim, scenario.objective)
+            objective = score_objective(sim.to_objective_metrics(), scenario.objective)
             run_dir = create_run_directory(workspace)
             bundle = write_artifact_bundle(
                 run_dir,

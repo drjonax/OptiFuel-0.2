@@ -376,7 +376,7 @@ def _optimize_legacy(
     if sim.failed:
         return OptimizerResult(outcome="infeasible_or_timeout", reason="infeasible")
 
-    objective = score_objective(sim, scenario.objective)
+    objective = score_objective(sim.to_objective_metrics(), scenario.objective)
     tuned_values = _collect_tuned_values(solver, tuned, resource_capacities, slack_by, scenario)
     return OptimizerResult(
         outcome="feasible",
@@ -477,7 +477,7 @@ def _optimize_structure_locked(
     if sim.failed:
         return OptimizerResult(outcome="infeasible_or_timeout", reason="infeasible")
 
-    objective = score_objective(sim, scenario.objective)
+    objective = score_objective(sim.to_objective_metrics(), scenario.objective)
     tuned_values = _collect_tuned_values(solver, tuned, resource_capacities, slack_by, scenario)
     return OptimizerResult(
         outcome="feasible",

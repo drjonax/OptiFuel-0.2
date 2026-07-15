@@ -34,7 +34,7 @@ def test_library_validate_and_simulate_paths() -> None:
     schedule_issues = validate_schedule(schedule, scenario)
     assert not any(i.severity == "error" for i in schedule_issues)
     sim = simulate(scenario, schedule)
-    score = score_objective(sim, scenario.objective)
+    score = score_objective(sim.to_objective_metrics(), scenario.objective)
     assert score.total >= 0
 
 
